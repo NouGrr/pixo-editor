@@ -25,7 +25,7 @@ function draw() {
   const height = Math.ceil(image.naturalWidth * s + image.naturalHeight * c);
   state.renderWidth = width; state.renderHeight = height;
   canvas.width = width; canvas.height = height;
-  ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX, state.flipY);
+  ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.zoom, state.flipY * state.zoom);
   ctx.filter = filterString(); ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);   ctx.restore();
   drawVignette(width, height);
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
@@ -129,7 +129,13 @@ cropOverlay.onpointerdown = (event) => {
   if (handle) {
     state.cropResize = { handle: handle.dataset.handle, x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY, width, height };
   } else {
-    state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
+    const rect = cropOverlay.getBoundingClientRect();
+    const edgeDistance = Math.min(event.clientX - rect.left, rect.right - event.clientX, event.clientY - rect.top, rect.bottom - event.clientY);
+    if (edgeDistance <= 18) {
+      state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
+    } else {
+      state.panStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
+    }
   }
   event.stopPropagation();
   cropOverlay.setPointerCapture(event.pointerId);
@@ -140,19 +146,26 @@ cropOverlay.onpointermove = (event) => {
     resizeCrop(event, scale);
     return;
   }
+  if (state.panStart) {
+    state.panX = state.panStart.panX + (event.clientX - state.panStart.x) / scale;
+    state.panY = state.panStart.panY + (event.clientY - state.panStart.y) / scale;
+    draw();
+    return;
+  }
   if (!state.cropStart) return;
   state.cropX = state.cropStart.cropX + (event.clientX - state.cropStart.x) / scale;
   state.cropY = state.cropStart.cropY + (event.clientY - state.cropStart.y) / scale;
   updateCropOverlay();
 };
 cropOverlay.onpointerup = (event) => {
-  if (!state.cropStart && !state.cropResize) return;
+  if (!state.cropStart && !state.cropResize && !state.panStart) return;
   state.cropStart = null;
   state.cropResize = null;
+  if (state.panStart) state.panStart = null;
   cropOverlay.releasePointerCapture(event.pointerId);
   snapshot();
 };
-cropOverlay.onpointercancel = () => { state.cropStart = null; state.cropResize = null; };
+cropOverlay.onpointercancel = () => { state.cropStart = null; state.cropResize = null; state.panStart = null; };
 function resizeCrop(event, scale) {
   const resize = state.cropResize;
   const dx = (event.clientX - resize.x) / scale;
@@ -601,6 +614,19 @@ canvas.onpointercancel = (event) => {
   state.painting = false; state.lastPaintPoint = null; state.paintBuffer = null; state.densityMask = null;
   canvas.releasePointerCapture(event.pointerId); commitCanvas();
 };
+function setZoom(value) {
+  state.zoom = Math.max(.25, Math.min(3, Number(value) || 1));
+  $("#zoomValue").textContent = `${Math.round(state.zoom * 100)}%`;
+  draw();
+}
+$("#zoomIn").onclick = () => setZoom(state.zoom + .1);
+$("#zoomOut").onclick = () => setZoom(state.zoom - .1);
+$("#fitButton").onclick = () => { state.panX = 0; state.panY = 0; setZoom(1); };
+$("#stageWrap").onwheel = (event) => {
+  if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"]')) return;
+  event.preventDefault();
+  setZoom(state.zoom + (event.deltaY < 0 ? .1 : -.1));
+};
 function point(event) { const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height }; }
 function updateBrushCursor(event) {
   const cursor = $("#brushCursor");
@@ -840,8 +866,5 @@ function restoreHistory(index) {
 }
 $("#undoButton").onclick = () => { if (state.historyIndex > 0) restoreHistory(state.historyIndex - 1); };
 $("#redoButton").onclick = () => { if (state.historyIndex < state.history.length - 1) restoreHistory(state.historyIndex + 1); };
-$("#zoomIn").onclick = () => { state.zoom = Math.min(2, state.zoom + .1); canvas.style.transform = `scale(${state.zoom})`; $("#zoomValue").textContent = `${Math.round(state.zoom * 100)}%`; };
-$("#zoomOut").onclick = () => { state.zoom = Math.max(.5, state.zoom - .1); canvas.style.transform = `scale(${state.zoom})`; $("#zoomValue").textContent = `${Math.round(state.zoom * 100)}%`; };
-$("#fitButton").onclick = () => { state.zoom = 1; canvas.style.transform = "scale(1)"; $("#zoomValue").textContent = "100%"; };
 $("#resetButton").onclick = () => location.reload();
 $("#exportButton").onclick = () => { if (!state.image) return; const link = document.createElement("a"); link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo.png`; link.href = canvas.toDataURL("image/png"); link.click(); };
