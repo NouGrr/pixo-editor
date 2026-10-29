@@ -16,7 +16,7 @@ function snapshot() {
   $("#undoButton").disabled = state.historyIndex < 1;
   $("#redoButton").disabled = true;
 }
-function draw(bypassFilter = false) {
+function draw() {
   if (!state.image) return;
   const image = state.image;
   const sourceWidth = image.naturalWidth || image.width;
@@ -35,14 +35,18 @@ function draw(bypassFilter = false) {
     ctx.clearRect(0, 0, width, height);
   }
   if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
-  ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
-  const retouchActive = $(".rail-tool.active")?.matches('[data-panel="retouch"]');
-  ctx.filter = (bypassFilter || retouchActive) ? "none" : filterString();
+  ctx.save();
+  ctx.translate(width / 2 + state.panX, height / 2 + state.panY);
+  ctx.rotate(angle);
+  ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
+  ctx.filter = "none";
   ctx.drawImage(image, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight);
   ctx.restore();
-  if (!bypassFilter && !retouchActive) drawVignette(width, height);
-  canvas.style.display = "block"; $("#emptyState").style.display = "none";
+  canvas.style.filter = filterString();
+  canvas.style.display = "block";
+  $("#emptyState").style.display = "none";
   fitCanvasToStage();
+  updateVignetteOverlay();
   $("#imageInfo").textContent = `${canvas.width} × ${canvas.height}px`;
 }
 let drawFrame = 0;
@@ -73,13 +77,44 @@ function filterString() {
   const sharpen = a.sharpness ? `contrast(${100 + a.sharpness * .18}%)` : "";
   return `brightness(${exposure}%) contrast(${contrast}%) saturate(${saturate}%) hue-rotate(${hue}deg) sepia(${warmth}%) ${sharpen}`;
 }
-function drawVignette(width, height) {
+function updateVignetteOverlay() {
+  const overlay = $("#vignetteOverlay");
+  if (!overlay) return;
   const amount = Math.min(1, state.adjustments.vignette / 100);
-  if (!amount) return;
-  const gradient = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * .06, width / 2, height / 2, Math.max(width, height) * .56);
+  if (!amount || !state.image) {
+    overlay.style.display = "none";
+    return;
+  }
   const color = $("#vignetteColor").value;
-  gradient.addColorStop(0, `${color}00`); gradient.addColorStop(.48, `${color}${Math.round(amount * 38).toString(16).padStart(2, "0")}`); gradient.addColorStop(.78, `${color}${Math.round(amount * 150).toString(16).padStart(2, "0")}`); gradient.addColorStop(1, `${color}${Math.round(amount * 255).toString(16).padStart(2, "0")}`);
-  ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, height); ctx.restore();
+  overlay.style.display = "block";
+  overlay.style.width = canvas.style.width;
+  overlay.style.height = canvas.style.height;
+  overlay.style.background = `radial-gradient(circle, ${color}00 6%, ${color}${Math.round(amount * 38).toString(16).padStart(2, "0")} 48%, ${color}${Math.round(amount * 150).toString(16).padStart(2, "0")} 78%, ${color}${Math.round(amount * 255).toString(16).padStart(2, "0")} 100%)`;
+  overlay.style.mixBlendMode = "multiply";
+}
+function getExportCanvas() {
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = canvas.width;
+  exportCanvas.height = canvas.height;
+  const exportCtx = exportCanvas.getContext("2d");
+  exportCtx.filter = filterString();
+  exportCtx.drawImage(canvas, 0, 0);
+  const amount = Math.min(1, state.adjustments.vignette / 100);
+  if (amount) {
+    const w = canvas.width, h = canvas.height;
+    const gradient = exportCtx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * .06, w / 2, h / 2, Math.max(w, h) * .56);
+    const color = $("#vignetteColor").value;
+    gradient.addColorStop(0, `${color}00`);
+    gradient.addColorStop(.48, `${color}${Math.round(amount * 38).toString(16).padStart(2, "0")}`);
+    gradient.addColorStop(.78, `${color}${Math.round(amount * 150).toString(16).padStart(2, "0")}`);
+    gradient.addColorStop(1, `${color}${Math.round(amount * 255).toString(16).padStart(2, "0")}`);
+    exportCtx.save();
+    exportCtx.globalCompositeOperation = "multiply";
+    exportCtx.fillStyle = gradient;
+    exportCtx.fillRect(0, 0, w, h);
+    exportCtx.restore();
+  }
+  return exportCanvas;
 }
 function loadFile(file) {
   if (!file) return;
@@ -118,7 +153,10 @@ $("#openButton").onclick = () => $("#fileInput").click();
 $("#fileInput").onchange = (e) => loadFile(e.target.files[0]);
 $("#stageWrap").ondragover = (e) => e.preventDefault();
 $("#stageWrap").ondrop = (e) => { e.preventDefault(); loadFile(e.dataTransfer.files[0]); };
-window.addEventListener("resize", fitCanvasToStage);
+window.addEventListener("resize", () => {
+  fitCanvasToStage();
+  updateVignetteOverlay();
+});
 $$(".rail-tool").forEach((button) => button.onclick = () => {
   const previousPanel = $(".rail-tool.active")?.dataset.panel;
   if (previousPanel === "crop" && button.dataset.panel !== "crop") restoreCommittedCrop();
@@ -385,7 +423,6 @@ $("#flipHorizontal").onclick = () => { state.flipX *= -1; draw(); snapshot(); };
 $("#flipVertical").onclick = () => { state.flipY *= -1; draw(); snapshot(); };
 $("#applyCrop").onclick = () => {
   if (!state.image) return;
-  draw(true);
   const width = Math.max(1, Number($("#cropWidth").value)), height = Math.max(1, Number($("#cropHeight").value));
   const cropCanvas = document.createElement("canvas");
   cropCanvas.width = Math.min(width, canvas.width); cropCanvas.height = Math.min(height, canvas.height);
@@ -533,15 +570,16 @@ function hideProcessing() {
 }
 function create4KPreview() {
   if (!state.image) throw new Error("Importez une image avant de créer un aperçu.");
-  const scale = Math.min(3840 / canvas.width, 3840 / canvas.height);
-  const targetWidth = Math.max(canvas.width, Math.round(canvas.width * scale));
-  const targetHeight = Math.max(canvas.height, Math.round(canvas.height * scale));
+  const exportCanvas = getExportCanvas();
+  const scale = Math.min(3840 / exportCanvas.width, 3840 / exportCanvas.height);
+  const targetWidth = Math.max(exportCanvas.width, Math.round(exportCanvas.width * scale));
+  const targetHeight = Math.max(exportCanvas.height, Math.round(exportCanvas.height * scale));
   const output = document.createElement("canvas");
   output.width = targetWidth; output.height = targetHeight;
   const outputContext = output.getContext("2d");
   outputContext.imageSmoothingEnabled = true;
   outputContext.imageSmoothingQuality = "high";
-  outputContext.drawImage(canvas, 0, 0, targetWidth, targetHeight);
+  outputContext.drawImage(exportCanvas, 0, 0, targetWidth, targetHeight);
   return output;
 }
 $("#preview4K").onclick = async () => {
@@ -597,9 +635,10 @@ $("#downloadConverted").onclick = async () => {
   showProcessing();
   await new Promise((resolve) => requestAnimationFrame(resolve));
   try {
+    const exportCanvas = getExportCanvas();
     const type = convertTypes[$("#convertFormat").value];
     const quality = Number($("#convertQuality").value) / 100;
-    const dataUrl = canvas.toDataURL(type.mime, quality);
+    const dataUrl = exportCanvas.toDataURL(type.mime, quality);
     const link = document.createElement("a");
     link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo.${type.extension}`;
     link.href = dataUrl;
@@ -1092,9 +1131,10 @@ $("#exportButton").onclick = async () => {
   showProcessing();
   await new Promise((resolve) => requestAnimationFrame(resolve));
   try {
+    const exportCanvas = getExportCanvas();
     const link = document.createElement("a");
     link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo.png`;
-    link.href = canvas.toDataURL("image/png");
+    link.href = exportCanvas.toDataURL("image/png");
     link.click();
   } finally {
     hideProcessing();
