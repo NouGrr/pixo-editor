@@ -5,7 +5,7 @@ const ctx = canvas.getContext("2d");
 const state = {
   image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1,
   adjustments: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, clarity: 0, dehaze: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0, sharpness: 0, vignette: 0 },
-  straighten: 0, cropRatio: null, cropPresetName: "Libre", renderWidth: 0, renderHeight: 0, cropX: 0, cropY: 0, cropStart: null, panX: 0, panY: 0, panStart: null, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
+  straighten: 0, cropRatio: null, cropPresetName: "Libre", renderWidth: 0, renderHeight: 0, cropX: 0, cropY: 0, cropStart: null, cropResize: null, panX: 0, panY: 0, panStart: null, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
 };
 
 function snapshot() {
@@ -123,23 +123,82 @@ $$(".preset").forEach((button) => button.onclick = () => {
 const cropOverlay = $("#cropOverlay");
 cropOverlay.onpointerdown = (event) => {
   if (!state.image) return;
-  state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
+  const handle = event.target.closest(".crop-handle");
+  const width = Number($("#cropWidth").value) || canvas.width;
+  const height = Number($("#cropHeight").value) || canvas.height;
+  if (handle) {
+    state.cropResize = { handle: handle.dataset.handle, x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY, width, height };
+  } else {
+    state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
+  }
+  event.stopPropagation();
   cropOverlay.setPointerCapture(event.pointerId);
 };
 cropOverlay.onpointermove = (event) => {
-  if (!state.cropStart) return;
   const scale = canvas.getBoundingClientRect().width / canvas.width || 1;
+  if (state.cropResize) {
+    resizeCrop(event, scale);
+    return;
+  }
+  if (!state.cropStart) return;
   state.cropX = state.cropStart.cropX + (event.clientX - state.cropStart.x) / scale;
   state.cropY = state.cropStart.cropY + (event.clientY - state.cropStart.y) / scale;
   updateCropOverlay();
 };
 cropOverlay.onpointerup = (event) => {
-  if (!state.cropStart) return;
+  if (!state.cropStart && !state.cropResize) return;
   state.cropStart = null;
+  state.cropResize = null;
   cropOverlay.releasePointerCapture(event.pointerId);
   snapshot();
 };
-cropOverlay.onpointercancel = () => { state.cropStart = null; };
+cropOverlay.onpointercancel = () => { state.cropStart = null; state.cropResize = null; };
+function resizeCrop(event, scale) {
+  const resize = state.cropResize;
+  const dx = (event.clientX - resize.x) / scale;
+  const dy = (event.clientY - resize.y) / scale;
+  const handle = resize.handle;
+  const locked = Boolean(state.cropRatio);
+  const ratio = state.cropRatio || resize.width / resize.height;
+  const minSize = Math.min(32, canvas.width, canvas.height);
+  let x = resize.cropX, y = resize.cropY, width = resize.width, height = resize.height;
+  if (locked) {
+    const horizontal = handle.includes("e") || handle.includes("w");
+    const delta = horizontal ? (handle.includes("w") ? -dx : dx) : (handle.includes("n") ? -dy : dy);
+    const size = Math.max(minSize, (horizontal ? resize.width : resize.height) + delta);
+    width = horizontal ? size : size * ratio;
+    height = horizontal ? size / ratio : size;
+    if (handle.includes("w")) x = resize.cropX + resize.width - width;
+    else if (!horizontal) x = resize.cropX + (resize.width - width) / 2;
+    if (handle.includes("n")) y = resize.cropY + resize.height - height;
+    else if (horizontal) y = resize.cropY + (resize.height - height) / 2;
+  } else {
+    if (handle.includes("w")) { x = resize.cropX + dx; width = resize.width - dx; }
+    if (handle.includes("e")) width = resize.width + dx;
+    if (handle.includes("n")) { y = resize.cropY + dy; height = resize.height - dy; }
+    if (handle.includes("s")) height = resize.height + dy;
+    width = Math.max(minSize, width); height = Math.max(minSize, height);
+    if (handle.includes("w")) x = resize.cropX + resize.width - width;
+    if (handle.includes("n")) y = resize.cropY + resize.height - height;
+  }
+  width = Math.min(width, canvas.width);
+  height = Math.min(height, canvas.height);
+  if (x < 0) { width += x; x = 0; }
+  if (y < 0) { height += y; y = 0; }
+  if (x + width > canvas.width) width = canvas.width - x;
+  if (y + height > canvas.height) height = canvas.height - y;
+  if (locked) {
+    if (width / height > ratio) width = height * ratio;
+    else height = width / ratio;
+    if (handle.includes("w")) x = resize.cropX + resize.width - width;
+    if (handle.includes("n")) y = resize.cropY + resize.height - height;
+  }
+  $("#cropWidth").value = Math.max(1, Math.round(width));
+  $("#cropHeight").value = Math.max(1, Math.round(height));
+  state.cropX = Math.max(0, Math.round(x));
+  state.cropY = Math.max(0, Math.round(y));
+  updateCropOverlay();
+}
 function updateCropOverlay() {
   const overlay = $("#cropOverlay");
   if (!state.image) { overlay.hidden = true; return; }
