@@ -122,7 +122,6 @@ window.addEventListener("resize", fitCanvasToStage);
 $$(".rail-tool").forEach((button) => button.onclick = () => {
   const previousPanel = $(".rail-tool.active")?.dataset.panel;
   if (previousPanel === "crop" && button.dataset.panel !== "crop") restoreCommittedCrop();
-  if (button.dataset.panel === "retouch") bakeAdjustmentsIntoRetouch();
   $$(".rail-tool").forEach((b) => b.classList.remove("active")); button.classList.add("active");
   const panel = button.dataset.panel;
   $$(".panel").forEach((p) => p.hidden = p.dataset.content !== panel);
@@ -131,6 +130,7 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
   $(".stage-wrap").classList.toggle("retouch-active", panel === "retouch" && Boolean(state.image) && Boolean(state.tool));
   $(".stage-wrap").classList.toggle("adjust-active", panel === "adjust" && Boolean(state.image));
   $(".stage-wrap").classList.toggle("crop-active", panel === "crop" && Boolean(state.image));
+  if (panel === "retouch") disableAdjustmentsForRetouch();
   if (panel === "retouch") {
     if (!state.tool) state.tool = "heal";
     $$(".retouch-tool").forEach((item) => item.classList.toggle("active", item.dataset.tool === state.tool));
@@ -413,21 +413,7 @@ function updateAdjustmentControls() {
     if (output) output.textContent = key === "vignette" ? state.adjustments[key] : `${state.adjustments[key] > 0 ? "+" : ""}${state.adjustments[key]}`;
   });
 }
-function bakeAdjustmentsIntoRetouch() {
-  const hasAdjustments = Object.values(state.adjustments).some((value) => value !== 0);
-  if (!hasAdjustments) return;
-  const bakedImage = document.createElement("canvas");
-  bakedImage.width = canvas.width;
-  bakedImage.height = canvas.height;
-  bakedImage.getContext("2d").drawImage(canvas, 0, 0);
-  state.image = bakedImage;
-  state.imageScale = 1;
-  state.rotation = 0;
-  state.straighten = 0;
-  state.flipX = 1;
-  state.flipY = 1;
-  state.panX = 0;
-  state.panY = 0;
+function disableAdjustmentsForRetouch() {
   Object.keys(state.adjustments).forEach((key) => { state.adjustments[key] = 0; });
   $$(".look-button").forEach((button) => button.classList.remove("active"));
   updateAdjustmentControls();
