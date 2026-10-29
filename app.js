@@ -666,8 +666,23 @@ function paintAt(p) {
   }
   if (state.tool === "clone" && state.cloneSource && state.cloneBuffer) {
     const source = state.cloneSource;
+    const size = Math.ceil(state.brushSize * 2);
+    const patch = document.createElement("canvas");
+    patch.width = size; patch.height = size;
+    patch.getContext("2d").drawImage(
+      state.cloneBuffer,
+      Math.round(source.x - state.brushSize),
+      Math.round(source.y - state.brushSize),
+      size,
+      size,
+      0,
+      0,
+      size,
+      size,
+    );
     ctx.save(); ctx.globalAlpha = state.brushOpacity; ctx.beginPath(); ctx.arc(p.x, p.y, state.brushSize / 2, 0, Math.PI * 2); ctx.clip();
-    ctx.drawImage(state.cloneBuffer, source.x - state.brushSize / 2, source.y - state.brushSize / 2, state.brushSize, state.brushSize, p.x - state.brushSize / 2, p.y - state.brushSize / 2, state.brushSize, state.brushSize); ctx.restore();
+    ctx.drawImage(patch, p.x - state.brushSize, p.y - state.brushSize);
+    ctx.restore();
     return;
   }
   const sourceCanvas = state.paintBuffer || canvas;
@@ -683,7 +698,7 @@ function paintAt(p) {
       const index = (y * size + x) * 4;
       for (let channel = 0; channel < 3; channel++) {
         const blur = (original[index - size * 4 + channel] + original[index - 4 + channel] + original[index + 4 + channel] + original[index + size * 4 + channel]) / 4;
-        sharpened.data[index + channel] = Math.max(0, Math.min(255, original[index + channel] + (original[index + channel] - blur) * 1.45));
+        sharpened.data[index + channel] = Math.max(0, Math.min(255, original[index + channel] + (original[index + channel] - blur) * 2.4));
       }
     }
     patchContext.putImageData(sharpened, 0, 0);
@@ -712,6 +727,18 @@ function paintAt(p) {
     const gradient = maskContext.createRadialGradient(size / 2, size / 2, state.brushSize * .12, size / 2, size / 2, state.brushSize / 2);
     gradient.addColorStop(0, `rgba(255,255,255,${state.blurAmount})`);
     gradient.addColorStop(.72, `rgba(255,255,255,${state.blurAmount * .72})`);
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    maskContext.fillStyle = gradient; maskContext.fillRect(0, 0, size, size);
+    patchContext.globalCompositeOperation = "destination-in";
+    patchContext.drawImage(mask, 0, 0);
+    ctx.globalAlpha = state.brushOpacity;
+    ctx.drawImage(patch, p.x - state.brushSize, p.y - state.brushSize);
+  } else if (state.tool === "sharpen") {
+    const mask = document.createElement("canvas");
+    mask.width = size; mask.height = size;
+    const maskContext = mask.getContext("2d");
+    const gradient = maskContext.createRadialGradient(size / 2, size / 2, state.brushSize * .12, size / 2, size / 2, state.brushSize / 2);
+    gradient.addColorStop(0, "rgba(255,255,255,.95)");
     gradient.addColorStop(1, "rgba(255,255,255,0)");
     maskContext.fillStyle = gradient; maskContext.fillRect(0, 0, size, size);
     patchContext.globalCompositeOperation = "destination-in";
@@ -747,9 +774,11 @@ canvas.onpointerdown = (event) => {
   if (activePanel !== "retouch") return;
   if (!["heal", "clone", "blur", "sharpen", "density"].includes(state.tool)) return;
   const p = point(event);
-  if (state.tool === "clone" && event.altKey) {
+  if (state.tool === "clone" && !state.cloneSource) {
     state.cloneSource = p; state.cloneBuffer = document.createElement("canvas"); state.cloneBuffer.width = canvas.width; state.cloneBuffer.height = canvas.height;
-    state.cloneBuffer.getContext("2d").drawImage(canvas, 0, 0); $("#canvasHint").textContent = "Source définie — peignez pour copier"; return;
+    state.cloneBuffer.getContext("2d").drawImage(canvas, 0, 0);
+    $("#canvasHint").textContent = "Source sélectionnée — cliquez et peignez à l’endroit où copier";
+    return;
   }
   state.paintBuffer = document.createElement("canvas"); state.paintBuffer.width = canvas.width; state.paintBuffer.height = canvas.height;
   state.paintBuffer.getContext("2d").drawImage(canvas, 0, 0);
