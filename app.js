@@ -5,7 +5,7 @@ const ctx = canvas.getContext("2d");
 const state = {
   image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1,
   adjustments: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, clarity: 0, dehaze: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0, sharpness: 0, vignette: 0 },
-  straighten: 0, cropRatio: null, cropPresetName: "Libre", renderWidth: 0, renderHeight: 0, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
+  straighten: 0, cropRatio: null, cropPresetName: "Libre", renderWidth: 0, renderHeight: 0, panX: 0, panY: 0, panStart: null, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
 };
 
 function snapshot() {
@@ -25,7 +25,7 @@ function draw() {
   const height = Math.ceil(image.naturalWidth * s + image.naturalHeight * c);
   state.renderWidth = width; state.renderHeight = height;
   canvas.width = width; canvas.height = height;
-  ctx.save(); ctx.translate(width / 2, height / 2); ctx.rotate(angle); ctx.scale(state.flipX, state.flipY);
+  ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX, state.flipY);
   ctx.filter = filterString(); ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);   ctx.restore();
   drawVignette(width, height);
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
@@ -145,11 +145,11 @@ $("#applyCrop").onclick = () => {
   const width = Math.max(1, Number($("#cropWidth").value)), height = Math.max(1, Number($("#cropHeight").value));
   const cropCanvas = document.createElement("canvas");
   cropCanvas.width = Math.min(width, canvas.width); cropCanvas.height = Math.min(height, canvas.height);
-  const sx = Math.max(0, Math.round((canvas.width - cropCanvas.width) / 2));
-  const sy = Math.max(0, Math.round((canvas.height - cropCanvas.height) / 2));
+  const sx = Math.max(0, Math.round((canvas.width - cropCanvas.width) / 2 - state.panX));
+  const sy = Math.max(0, Math.round((canvas.height - cropCanvas.height) / 2 - state.panY));
   cropCanvas.getContext("2d").drawImage(canvas, sx, sy, cropCanvas.width, cropCanvas.height, 0, 0, cropCanvas.width, cropCanvas.height);
   const source = cropCanvas.toDataURL("image/png"), image = new Image();
-  image.onload = () => { state.image = image; state.rotation = 0; state.straighten = 0; $("#straightenRange").value = 0; $("#straightenOutput").textContent = "0°"; draw(); snapshot(); };
+  image.onload = () => { state.image = image; state.rotation = 0; state.straighten = 0; state.panX = 0; state.panY = 0; $("#straightenRange").value = 0; $("#straightenOutput").textContent = "0°"; draw(); snapshot(); };
   image.src = source;
 };
 $$(".adjustment").forEach((input) => input.oninput = () => {
@@ -427,6 +427,12 @@ function paintStroke(from, to) {
 }
 canvas.onpointerdown = (event) => {
   if (!state.image) return;
+  const cropMode = $(".rail-tool.active")?.matches('[data-panel="crop"]');
+  if (cropMode) {
+    state.panStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
+    canvas.setPointerCapture(event.pointerId);
+    return;
+  }
   const p = point(event);
   if (state.tool === "clone" && event.altKey) {
     state.cloneSource = p; state.cloneBuffer = document.createElement("canvas"); state.cloneBuffer.width = canvas.width; state.cloneBuffer.height = canvas.height;
@@ -443,6 +449,13 @@ canvas.onpointerdown = (event) => {
 };
 canvas.onpointermove = (event) => {
   updateBrushCursor(event);
+  if (state.panStart) {
+    const scale = canvas.getBoundingClientRect().width / canvas.width || 1;
+    state.panX = state.panStart.panX + (event.clientX - state.panStart.x) / scale;
+    state.panY = state.panStart.panY + (event.clientY - state.panStart.y) / scale;
+    draw();
+    return;
+  }
   if (!state.painting) return;
   const nextPoint = point(event);
   paintStroke(state.lastPaintPoint, nextPoint);
@@ -451,6 +464,11 @@ canvas.onpointermove = (event) => {
 canvas.onpointerenter = updateBrushCursor;
 canvas.onpointerleave = () => { $("#brushCursor").style.display = "none"; };
 canvas.onpointerup = (event) => {
+  if (state.panStart) {
+    state.panStart = null;
+    snapshot();
+    return;
+  }
   if (!state.painting) return;
   const endPoint = point(event);
   paintStroke(state.lastPaintPoint, endPoint);
@@ -458,6 +476,10 @@ canvas.onpointerup = (event) => {
   canvas.releasePointerCapture(event.pointerId); commitCanvas();
 };
 canvas.onpointercancel = (event) => {
+  if (state.panStart) {
+    state.panStart = null;
+    return;
+  }
   if (!state.painting) return;
   state.painting = false; state.lastPaintPoint = null; state.paintBuffer = null; state.densityMask = null;
   canvas.releasePointerCapture(event.pointerId); commitCanvas();
