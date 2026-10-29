@@ -215,7 +215,7 @@ function resizeCrop(event, scale) {
 }
 function updateCropOverlay() {
   const overlay = $("#cropOverlay");
-  if (!state.image) { overlay.hidden = true; return; }
+  if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"]')) { overlay.hidden = true; return; }
   overlay.hidden = false;
   const transformedRect = canvas.getBoundingClientRect();
   const imageRect = {
