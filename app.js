@@ -37,10 +37,10 @@ function draw() {
   if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
   ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
   const retouchActive = $(".rail-tool.active")?.matches('[data-panel="retouch"]');
-  ctx.filter = retouchActive || state.retouchImageBaked ? "none" : filterString();
+  ctx.filter = retouchActive ? "none" : filterString();
   ctx.drawImage(image, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight);
   ctx.restore();
-  if (!retouchActive && !state.retouchImageBaked) drawVignette(width, height);
+  if (!retouchActive) drawVignette(width, height);
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
   fitCanvasToStage();
   $("#imageInfo").textContent = `${canvas.width} × ${canvas.height}px`;
@@ -414,8 +414,12 @@ function updateAdjustmentControls() {
     if (output) output.textContent = key === "vignette" ? state.adjustments[key] : `${state.adjustments[key] > 0 ? "+" : ""}${state.adjustments[key]}`;
   });
 }
+function hasNonZeroAdjustments() {
+  return Object.values(state.adjustments).some((v) => v !== 0);
+}
 function prepareRetouchImage() {
-  if (!state.image || state.retouchImageBaked) return;
+  if (!state.image) return;
+  if (state.retouchImageBaked && !hasNonZeroAdjustments()) return;
   draw();
   const bakedImage = document.createElement("canvas");
   bakedImage.width = canvas.width;
@@ -430,6 +434,8 @@ function prepareRetouchImage() {
   state.panX = 0;
   state.panY = 0;
   state.retouchImageBaked = true;
+  Object.keys(state.adjustments).forEach((key) => { state.adjustments[key] = 0; });
+  updateAdjustmentControls();
   draw();
 }
 
@@ -468,6 +474,11 @@ $$(".retouch-tool").forEach((button) => button.onclick = () => {
   $(".stage-wrap").classList.toggle("retouch-active", Boolean(state.tool) && $(".rail-tool.active")?.matches('[data-panel="retouch"]'));
   updateBrushCursor();
 });
+$("#resetCloneSource").onclick = () => {
+  state.cloneSource = null;
+  state.cloneBuffer = null;
+  if (state.tool === "clone") $("#canvasHint").textContent = "Tampon réinitialisé — cliquez sur l’image pour choisir une nouvelle source";
+};
 $$(".retouch-tab").forEach((button) => button.onclick = () => {
   const density = button.dataset.retouchTab === "density";
   $$(".retouch-tab").forEach((item) => item.classList.toggle("active", item === button));
