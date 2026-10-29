@@ -5,7 +5,7 @@ const ctx = canvas.getContext("2d");
 const state = {
   image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1,
   adjustments: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, clarity: 0, dehaze: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0, sharpness: 0, vignette: 0 },
-  straighten: 0, cropRatio: null, cropPresetName: "Libre", renderWidth: 0, renderHeight: 0, panX: 0, panY: 0, panStart: null, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
+  straighten: 0, cropRatio: null, cropPresetName: "Libre", renderWidth: 0, renderHeight: 0, cropX: 0, cropY: 0, cropStart: null, panX: 0, panY: 0, panStart: null, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
 };
 
 function snapshot() {
@@ -98,8 +98,10 @@ $$(".preset").forEach((button) => button.onclick = () => {
     if (height > sourceHeight) { height = sourceHeight; width = Math.round(height * state.cropRatio); }
     $("#cropWidth").value = width; $("#cropHeight").value = height;
   } else if (state.image) {
-    $("#cropWidth").value = state.renderWidth; $("#cropHeight").value = state.renderHeight;
+    $("#cropWidth").value = Math.max(1, Math.round(state.renderWidth * .9));
+    $("#cropHeight").value = Math.max(1, Math.round(state.renderHeight * .9));
   }
+  state.cropX = 0; state.cropY = 0;
   draw();
   updateCropOverlay();
 });
@@ -109,31 +111,57 @@ $$(".preset").forEach((button) => button.onclick = () => {
     state.cropRatio = width / height;
     state.cropPresetName = "Format personnalisé";
     $$(".preset").forEach((button) => button.classList.remove("active"));
+    state.cropX = Math.max(0, Math.round((canvas.width - width) / 2));
+    state.cropY = Math.max(0, Math.round((canvas.height - height) / 2));
     draw();
     updateCropOverlay();
   }
 });
+const cropOverlay = $("#cropOverlay");
+cropOverlay.onpointerdown = (event) => {
+  if (!state.image) return;
+  state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
+  cropOverlay.setPointerCapture(event.pointerId);
+};
+cropOverlay.onpointermove = (event) => {
+  if (!state.cropStart) return;
+  const scale = canvas.getBoundingClientRect().width / canvas.width || 1;
+  state.cropX = state.cropStart.cropX + (event.clientX - state.cropStart.x) / scale;
+  state.cropY = state.cropStart.cropY + (event.clientY - state.cropStart.y) / scale;
+  updateCropOverlay();
+};
+cropOverlay.onpointerup = (event) => {
+  if (!state.cropStart) return;
+  state.cropStart = null;
+  cropOverlay.releasePointerCapture(event.pointerId);
+  snapshot();
+};
+cropOverlay.onpointercancel = () => { state.cropStart = null; };
 function updateCropOverlay() {
   const overlay = $("#cropOverlay");
-  if (!state.image || !state.cropRatio) { overlay.hidden = true; overlay.style.removeProperty("--crop-ratio"); return; }
+  if (!state.image) { overlay.hidden = true; return; }
   overlay.hidden = false;
-  overlay.style.setProperty("--crop-ratio", state.cropRatio);
   const imageRect = canvas.getBoundingClientRect();
   const stageRect = $(".stage-wrap").getBoundingClientRect();
-  const maxWidth = imageRect.width * .92;
-  const maxHeight = imageRect.height * .92;
-  let cropWidth = maxWidth;
-  let cropHeight = cropWidth / state.cropRatio;
-  if (cropHeight > maxHeight) {
-    cropHeight = maxHeight;
-    cropWidth = cropHeight * state.cropRatio;
+  const scale = imageRect.width / canvas.width || 1;
+  let width = Number($("#cropWidth").value) || canvas.width;
+  let height = Number($("#cropHeight").value) || canvas.height;
+  if (state.cropRatio) {
+    width = Math.min(width, canvas.width);
+    height = Math.min(height, canvas.height);
+  } else {
+    width = Math.min(width, canvas.width);
+    height = Math.min(height, canvas.height);
   }
+  const cropWidth = width * scale;
+  const cropHeight = height * scale;
+  const x = Math.max(0, Math.min(canvas.width - width, state.cropX));
+  const y = Math.max(0, Math.min(canvas.height - height, state.cropY));
+  state.cropX = x; state.cropY = y;
   overlay.style.width = `${Math.max(1, cropWidth)}px`;
   overlay.style.height = `${Math.max(1, cropHeight)}px`;
-  overlay.style.left = `${imageRect.left - stageRect.left + imageRect.width / 2}px`;
-  overlay.style.top = `${imageRect.top - stageRect.top + imageRect.height / 2}px`;
-  const width = Number($("#cropWidth").value);
-  const height = Number($("#cropHeight").value);
+  overlay.style.left = `${imageRect.left - stageRect.left + (x + width / 2) * scale}px`;
+  overlay.style.top = `${imageRect.top - stageRect.top + (y + height / 2) * scale}px`;
   $("#cropPreviewLabel").textContent = `Aperçu — ${state.cropPresetName} · ${width} × ${height}`;
 }
 $("#straightenRange").oninput = (e) => { state.straighten = Number(e.target.value); $("#straightenOutput").textContent = `${state.straighten}°`; draw(); };
@@ -145,8 +173,8 @@ $("#applyCrop").onclick = () => {
   const width = Math.max(1, Number($("#cropWidth").value)), height = Math.max(1, Number($("#cropHeight").value));
   const cropCanvas = document.createElement("canvas");
   cropCanvas.width = Math.min(width, canvas.width); cropCanvas.height = Math.min(height, canvas.height);
-  const sx = Math.max(0, Math.round((canvas.width - cropCanvas.width) / 2 - state.panX));
-  const sy = Math.max(0, Math.round((canvas.height - cropCanvas.height) / 2 - state.panY));
+  const sx = Math.max(0, Math.min(canvas.width - cropCanvas.width, Math.round(state.cropX)));
+  const sy = Math.max(0, Math.min(canvas.height - cropCanvas.height, Math.round(state.cropY)));
   cropCanvas.getContext("2d").drawImage(canvas, sx, sy, cropCanvas.width, cropCanvas.height, 0, 0, cropCanvas.width, cropCanvas.height);
   const source = cropCanvas.toDataURL("image/png"), image = new Image();
   image.onload = () => { state.image = image; state.rotation = 0; state.straighten = 0; state.panX = 0; state.panY = 0; $("#straightenRange").value = 0; $("#straightenOutput").textContent = "0°"; draw(); snapshot(); };
