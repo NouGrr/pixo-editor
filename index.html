@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixo — Éditeur photo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">✦</span><span>Pixo</span></div>
+        <div class="document-name" id="documentName">Sans titre</div>
+        <div class="top-actions">
+          <button class="icon-button" id="undoButton" title="Annuler" aria-label="Annuler">↶</button>
+          <button class="icon-button" id="redoButton" title="Rétablir" aria-label="Rétablir">↷</button>
+          <button class="export-button" id="exportButton">Exporter</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="tool-rail" aria-label="Outils">
+          <button class="rail-tool active" data-panel="crop" title="Recadrer"><span>⌗</span><small>Recadrer</small></button>
+          <button class="rail-tool" data-panel="adjust" title="Ajuster"><span>☼</span><small>Ajuster</small></button>
+          <button class="rail-tool" data-panel="retouch" title="Retouche"><span>✧</span><small>Retouche</small></button>
+        </aside>
+
+        <section class="canvas-area">
+          <div class="canvas-toolbar">
+            <div class="canvas-tools">
+              <button class="plain-button" id="fitButton">Ajuster à l’écran</button>
+              <span class="zoom-value" id="zoomValue">100%</span>
+            </div>
+            <div class="canvas-hint" id="canvasHint">Importez une image pour commencer</div>
+            <div class="canvas-tools">
+              <button class="icon-button compact" id="zoomOut">−</button>
+              <button class="icon-button compact" id="zoomIn">+</button>
+            </div>
+          </div>
+          <div class="stage-wrap" id="stageWrap">
+            <div class="processing-overlay" id="processingOverlay" hidden>
+              <span class="processing-star">✦</span>
+              <b id="processingLabel">Détourage en cours…</b>
+              <small id="processingProgress">Analyse de l’arrière-plan</small>
+            </div>
+            <div class="brush-cursor" id="brushCursor" aria-hidden="true"></div>
+            <div class="empty-state" id="emptyState">
+              <div class="upload-icon">↑</div>
+              <h2>Déposez votre image ici</h2>
+              <p>ou choisissez un fichier depuis votre appareil</p>
+              <button class="primary-button" id="openButton">Choisir une image</button>
+              <input id="fileInput" type="file" accept="image/*" hidden />
+            </div>
+            <canvas id="canvas"></canvas>
+            <div class="crop-overlay" id="cropOverlay" hidden>
+              <div class="crop-grid"></div>
+              <div class="crop-box"></div>
+              <div class="crop-preview-label" id="cropPreviewLabel">Aperçu du format</div>
+            </div>
+          </div>
+          <div class="stage-footer">
+            <span id="imageInfo">Aucune image</span>
+            <button class="plain-button" id="resetButton">Réinitialiser</button>
+          </div>
+        </section>
+
+        <aside class="inspector">
+          <div class="inspector-header">
+            <div>
+              <p class="eyebrow">Édition</p>
+              <h1 id="panelTitle">Recadrer</h1>
+            </div>
+            <button class="more-button">•••</button>
+          </div>
+
+          <section class="panel" data-content="crop">
+            <div class="section-title"><span>Format</span><span class="muted">Ratio</span></div>
+            <div class="preset-grid">
+              <button class="preset active" data-ratio="free"><span class="ratio-icon free-icon"></span><b>Libre</b><small>Original</small></button>
+              <button class="preset" data-ratio="1"><span class="ratio-icon square-icon"></span><b>Instagram carré</b><small>1:1</small></button>
+              <button class="preset" data-ratio="0.8"><span class="ratio-icon portrait-icon"></span><b>Instagram portrait</b><small>4:5</small></button>
+              <button class="preset" data-ratio="1.91"><span class="ratio-icon landscape-icon"></span><b>Instagram paysage</b><small>1.91:1</small></button>
+              <button class="preset" data-ratio="0.5625"><span class="ratio-icon story-icon"></span><b>Story / Reel</b><small>9:16</small></button>
+              <button class="preset" data-ratio="1"><span class="ratio-icon avatar-icon"></span><b>Profil</b><small>1:1</small></button>
+              <button class="preset" data-ratio="0.5625"><span class="ratio-icon story-icon"></span><b>Snap Story</b><small>9:16</small></button>
+              <button class="preset" data-ratio="0.5625"><span class="ratio-icon story-icon"></span><b>TikTok</b><small>9:16</small></button>
+              <button class="preset" data-ratio="0.5625"><span class="ratio-icon story-icon"></span><b>YouTube Short</b><small>9:16</small></button>
+              <button class="preset" data-ratio="1.7778"><span class="ratio-icon landscape-icon"></span><b>X / Twitter</b><small>16:9</small></button>
+              <button class="preset" data-ratio="3"><span class="ratio-icon banner-icon"></span><b>X bannière</b><small>3:1</small></button>
+              <button class="preset" data-ratio="1.91"><span class="ratio-icon landscape-icon"></span><b>Facebook</b><small>1.91:1</small></button>
+              <button class="preset" data-ratio="1.91"><span class="ratio-icon landscape-icon"></span><b>LinkedIn</b><small>1.91:1</small></button>
+              <button class="preset" data-ratio="1.7778"><span class="ratio-icon landscape-icon"></span><b>YouTube</b><small>16:9</small></button>
+            </div>
+            <div class="control-row">
+              <label>Largeur <input id="cropWidth" type="number" value="0" min="1" /></label>
+              <span class="multiply">×</span>
+              <label>Hauteur <input id="cropHeight" type="number" value="0" min="1" /></label>
+            </div>
+            <div class="divider"></div>
+            <div class="section-title"><span>Transformer</span></div>
+            <div class="transform-grid">
+              <button class="secondary-button" id="rotateLeft">↺ <span>90° gauche</span></button>
+              <button class="secondary-button" id="rotateRight">↻ <span>90° droite</span></button>
+              <button class="secondary-button" id="flipHorizontal">⇄ <span>Retourner H</span></button>
+              <button class="secondary-button" id="flipVertical">⇅ <span>Retourner V</span></button>
+            </div>
+            <div class="straighten-card">
+              <div class="straighten-heading"><span>Redresser</span><output id="straightenOutput">0°</output></div>
+              <input class="range" id="straightenRange" type="range" min="-45" max="45" value="0" step="0.1" />
+              <div class="range-labels"><span>−45°</span><span>0°</span><span>45°</span></div>
+            </div>
+            <button class="apply-button" id="applyCrop">Appliquer le recadrage</button>
+          </section>
+
+          <section class="panel" data-content="adjust" hidden>
+            <div class="section-title"><span>Réglages rapides</span><span class="muted">1 clic</span></div>
+            <div class="look-grid">
+              <button class="look-button" data-look="clean"><b>Propre</b><small>Lumière équilibrée</small></button>
+              <button class="look-button" data-look="portrait"><b>Portrait</b><small>Peau naturelle</small></button>
+              <button class="look-button" data-look="product"><b>Produit</b><small>Net et lumineux</small></button>
+              <button class="look-button" data-look="cinema"><b>Cinéma</b><small>Contraste doux</small></button>
+            </div>
+            <div class="section-title"><span>Lumière</span></div>
+            <div class="slider-control"><label>Exposition <output id="exposureOutput">0</output></label><input class="range adjustment" id="exposure" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Contraste <output id="contrastOutput">0</output></label><input class="range adjustment" id="contrast" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Hautes lumières <output id="highlightsOutput">0</output></label><input class="range adjustment" id="highlights" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Ombres <output id="shadowsOutput">0</output></label><input class="range adjustment" id="shadows" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Clarté <output id="clarityOutput">0</output></label><input class="range adjustment" id="clarity" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Réduction du voile <output id="dehazeOutput">0</output></label><input class="range adjustment" id="dehaze" type="range" min="-100" max="100" value="0" /></div>
+            <div class="divider"></div>
+            <div class="section-title"><span>Couleur</span></div>
+            <div class="slider-control"><label>Saturation <output id="saturationOutput">0</output></label><input class="range adjustment" id="saturation" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Vibrance <output id="vibranceOutput">0</output></label><input class="range adjustment" id="vibrance" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Température <output id="temperatureOutput">0</output></label><input class="range adjustment" id="temperature" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Teinte <output id="tintOutput">0</output></label><input class="range adjustment" id="tint" type="range" min="-100" max="100" value="0" /></div>
+            <div class="slider-control"><label>Netteté globale <output id="sharpnessOutput">0</output></label><input class="range adjustment" id="sharpness" type="range" min="0" max="100" value="0" /></div>
+            <div class="divider"></div>
+            <div class="vignette-heading"><div><span class="section-title">Vignette</span><small>Choisissez votre couleur</small></div><input id="vignetteColor" type="color" value="#11131b" /></div>
+            <div class="slider-control"><label>Intensité <output id="vignetteOutput">0</output></label><input class="range adjustment" id="vignette" type="range" min="0" max="100" value="0" /></div>
+            <button class="secondary-button wide" id="resetAdjustments">Réinitialiser les ajustements</button>
+          </section>
+
+          <section class="panel" data-content="retouch" hidden>
+            <div class="retouch-tabs"><button class="retouch-tab active" data-retouch-tab="repair">Réparer</button><button class="retouch-tab" data-retouch-tab="density">Densité</button></div>
+            <div class="density-panel" id="densityPanel" hidden>
+              <div class="section-title"><span>Mode de densité</span><output id="densityModeOutput">Éclaircir</output></div>
+              <div class="density-modes">
+                <button class="mask-tool density-mode active" data-density-mode="lighten">☼ Éclaircir</button>
+                <button class="mask-tool density-mode" data-density-mode="darken">◐ Assombrir</button>
+              </div>
+              <div class="slider-control"><label>Intensité <output id="densityAmountOutput">35%</output></label><input class="range" id="densityAmount" type="range" min="5" max="100" value="35" /></div>
+              <small class="cutout-note">Peignez pour éclaircir ou assombrir localement les tons, avec une transition douce.</small>
+            </div>
+            <div class="retouch-tools" id="repairTools">
+              <button class="retouch-tool active" data-tool="heal"><span>✦</span><b>Corriger</b><small>Fondre les détails</small></button>
+              <button class="retouch-tool" data-tool="clone"><span>◉</span><b>Tampon</b><small>Copier une zone</small></button>
+              <button class="retouch-tool" data-tool="blur"><span>◌</span><b>Flou</b><small>Adoucir une zone</small></button>
+              <button class="retouch-tool" data-tool="sharpen"><span>✧</span><b>Netteté</b><small>Renforcer les détails</small></button>
+            </div>
+            <div class="blur-options" id="blurOptions" hidden>
+              <div class="section-title"><span>Densité du flou</span><output id="blurDensityOutput">14 px</output></div>
+              <input class="range" id="blurDensity" type="range" min="2" max="48" value="14" />
+              <div class="slider-control"><label>Pourcentage de flou <output id="blurAmountOutput">70%</output></label><input class="range" id="blurAmount" type="range" min="5" max="100" value="70" /></div>
+              <small class="cutout-note">La densité définit la force du flou. Le pourcentage contrôle son application sur le trait.</small>
+            </div>
+            <button class="auto-cutout" id="autoCutout"><span>✂</span><div><b>Détourage IA IMG.LY</b><small>Traitement local dans le navigateur</small></div><i>›</i></button>
+            <div class="cutout-options">
+              <div class="section-title"><span>Sensibilité du fond</span><output id="cutoutToleranceOutput">62</output></div>
+              <input class="range" id="cutoutTolerance" type="range" min="20" max="160" value="62" />
+              <div class="section-title"><span>Adoucir le contour</span><output id="cutoutSoftnessOutput">18</output></div>
+              <input class="range" id="cutoutSoftness" type="range" min="0" max="60" value="18" />
+              <small class="cutout-note">Augmentez la sensibilité pour un fond irrégulier. Diminuez-la pour préserver les détails.</small>
+              <div class="mask-tools">
+                <span>Affiner le masque</span>
+                <button class="mask-tool active" data-mask-mode="add">＋ Ajouter</button>
+                <button class="mask-tool" data-mask-mode="remove">− Retirer</button>
+              </div>
+            </div>
+            <div class="brush-card">
+              <div class="section-title"><span>Pinceau</span><output id="brushSizeOutput">36 px</output></div>
+              <input class="range" id="brushSize" type="range" min="8" max="160" value="36" />
+              <div class="range-labels"><span>Petit</span><span>Grand</span></div>
+              <div class="slider-control"><label>Opacité <output id="brushOpacityOutput">100%</output></label><input class="range" id="brushOpacity" type="range" min="10" max="100" value="100" /></div>
+            </div>
+            <div class="upscale-card">
+              <div class="section-title"><span>Amélioration 4K</span><span class="muted">Aperçu avant export</span></div>
+              <p>Créez une version agrandie jusqu’à 3840 px, puis vérifiez-la avant téléchargement.</p>
+              <button class="secondary-button wide" id="preview4K" disabled>Prévisualiser en 4K</button>
+            </div>
+            <div class="convert-card">
+              <div class="section-title"><span>Convertir l’image</span><span class="muted">Image actuelle</span></div>
+              <div class="convert-row">
+                <label for="convertFormat">Format
+                  <select id="convertFormat">
+                    <option value="png">PNG</option>
+                    <option value="jpeg">JPG</option>
+                    <option value="webp">WebP</option>
+                    <option value="avif">AVIF</option>
+                  </select>
+                </label>
+                <label for="convertQuality">Qualité
+                  <input id="convertQuality" type="range" min="10" max="100" value="92" />
+                  <output id="convertQualityOutput">92%</output>
+                </label>
+              </div>
+              <small class="convert-note" id="convertInfo">Choisissez un format puis téléchargez l’image éditée.</small>
+              <button class="secondary-button wide" id="downloadConverted" disabled>Télécharger l’image convertie</button>
+            </div>
+            <div class="clone-help" id="cloneHelp"><span class="help-icon">i</span><p><b>Le vrai tampon</b><br />Définissez une source, puis peignez où vous voulez la copier. La source reste en place.</p></div>
+            <button class="secondary-button wide" id="clearRetouch">Effacer les retouches</button>
+          </section>
+        </aside>
+      </main>
+    </div>
+    <div class="modal" id="previewModal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+        <div class="modal-header"><div><p class="eyebrow">Export haute définition</p><h2 id="previewTitle">Prévisualisation 4K</h2></div><button class="icon-button" id="closePreview" aria-label="Fermer">×</button></div>
+        <div class="preview-frame"><img id="preview4KImage" alt="Prévisualisation de l’image en 4K" /></div>
+        <div class="modal-footer"><span id="preview4KInfo"></span><button class="export-button" id="download4K">Télécharger le PNG 4K</button></div>
+      </div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
