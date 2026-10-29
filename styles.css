@@ -50,7 +50,7 @@ button { cursor: pointer; color: inherit; border: 0; }
 .stage-wrap { position: relative; display: grid; place-items: center; flex: 1; min-height: 0; margin: 0 18px; border: 1px dashed #303441; border-radius: 10px; overflow: hidden; background: repeating-conic-gradient(#151720 0% 25%, #12131a 0% 50%) 50% / 20px 20px; }
 .stage-wrap.is-zoomed { overflow: auto; }
 .processing-overlay { position: absolute; z-index: 5; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text); background: #0c0d12d9; backdrop-filter: blur(5px); }.processing-overlay[hidden] { display: none; }.processing-star { color: var(--accent); font-size: 34px; animation: pixo-spin .9s linear infinite; }.processing-overlay b { font-size: 13px; }.processing-overlay small { color: var(--muted); font-size: 11px; }@keyframes pixo-spin { to { transform: rotate(360deg); } }
-#canvas { width: auto; height: auto; max-width: 100%; max-height: 100%; display: none; box-shadow: 0 18px 50px #0008; }
+#canvas { width: auto; height: auto; max-width: calc(100% - 20px); max-height: calc(100% - 20px); display: none; box-shadow: 0 18px 50px #0008; }
 .stage-wrap:not(.retouch-active) #canvas { cursor: grab; }
 .stage-wrap:not(.retouch-active) #canvas:active { cursor: grabbing; }
 .brush-cursor { position: absolute; z-index: 4; width: 36px; height: 36px; display: none; pointer-events: none; transform: translate(-50%, -50%); border: 1px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #17131f, 0 0 0 2px #ffffff80; }
