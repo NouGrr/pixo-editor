@@ -36,8 +36,11 @@ function draw() {
   }
   if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
   ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
-  ctx.filter = filterString(); ctx.drawImage(image, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight); ctx.restore();
-  drawVignette(width, height);
+  const retouchActive = $(".rail-tool.active")?.matches('[data-panel="retouch"]');
+  ctx.filter = retouchActive ? "none" : filterString();
+  ctx.drawImage(image, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight);
+  ctx.restore();
+  if (!retouchActive) drawVignette(width, height);
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
   fitCanvasToStage();
   $("#imageInfo").textContent = `${canvas.width} × ${canvas.height}px`;
@@ -119,6 +122,7 @@ window.addEventListener("resize", fitCanvasToStage);
 $$(".rail-tool").forEach((button) => button.onclick = () => {
   const previousPanel = $(".rail-tool.active")?.dataset.panel;
   if (previousPanel === "crop" && button.dataset.panel !== "crop") restoreCommittedCrop();
+  if (button.dataset.panel === "retouch") bakeAdjustmentsIntoRetouch();
   $$(".rail-tool").forEach((b) => b.classList.remove("active")); button.classList.add("active");
   const panel = button.dataset.panel;
   $$(".panel").forEach((p) => p.hidden = p.dataset.content !== panel);
@@ -392,6 +396,7 @@ $("#applyCrop").onclick = () => {
   image.src = source;
 };
 $$(".adjustment").forEach((input) => input.oninput = () => {
+  if ($(".rail-tool.active")?.matches('[data-panel="retouch"]')) return;
   $$(".look-button").forEach((button) => button.classList.remove("active"));
   state.adjustments[input.id] = Number(input.value); $(`#${input.id}Output`).textContent = input.id === "vignette" ? input.value : `${input.value > 0 ? "+" : ""}${input.value}`; draw();
 });
@@ -430,6 +435,7 @@ function bakeAdjustmentsIntoRetouch() {
 }
 
 $$(".look-button").forEach((button) => button.onclick = () => {
+  if ($(".rail-tool.active")?.matches('[data-panel="retouch"]')) return;
   const values = looks[button.dataset.look];
   const isActive = button.classList.contains("active");
   $$(".look-button").forEach((item) => item.classList.remove("active"));
@@ -440,8 +446,14 @@ $$(".look-button").forEach((button) => button.onclick = () => {
   updateAdjustmentControls();
   draw(); snapshot();
 });
-$("#vignetteColor").oninput = () => { $$(".look-button").forEach((button) => button.classList.remove("active")); draw(); };
-$("#resetAdjustments").onclick = () => { Object.keys(state.adjustments).forEach((key) => { state.adjustments[key] = 0; const input = $(`#${key}`); if (input) { input.value = 0; $(`#${key}Output`).textContent = "0"; } }); draw(); snapshot(); };
+$("#vignetteColor").oninput = () => {
+  if ($(".rail-tool.active")?.matches('[data-panel="retouch"]')) return;
+  $$(".look-button").forEach((button) => button.classList.remove("active")); draw();
+};
+$("#resetAdjustments").onclick = () => {
+  if ($(".rail-tool.active")?.matches('[data-panel="retouch"]')) return;
+  Object.keys(state.adjustments).forEach((key) => { state.adjustments[key] = 0; const input = $(`#${key}`); if (input) { input.value = 0; $(`#${key}Output`).textContent = "0"; } }); draw(); snapshot();
+};
 function updateBlurControls() { $("#blurOptions").hidden = state.tool !== "blur"; }
 $$(".retouch-tool").forEach((button) => button.onclick = () => {
   const isActive = button.classList.contains("active");
@@ -735,7 +747,6 @@ canvas.onpointerdown = (event) => {
   }
   if (activePanel !== "retouch") return;
   if (!["heal", "clone", "blur", "sharpen", "density"].includes(state.tool)) return;
-  bakeAdjustmentsIntoRetouch();
   const p = point(event);
   if (state.tool === "clone" && event.altKey) {
     state.cloneSource = p; state.cloneBuffer = document.createElement("canvas"); state.cloneBuffer.width = canvas.width; state.cloneBuffer.height = canvas.height;
