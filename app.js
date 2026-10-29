@@ -85,8 +85,9 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
   $$(".panel").forEach((p) => p.hidden = p.dataset.content !== panel);
   $("#panelTitle").textContent = panel === "crop" ? "Recadrer" : panel === "adjust" ? "Ajuster" : "Retouche";
   $("#cropOverlay").hidden = panel !== "crop" || !state.image;
-  $(".stage-wrap").classList.toggle("retouch-active", panel === "retouch" && Boolean(state.image));
+  $(".stage-wrap").classList.toggle("retouch-active", panel === "retouch" && Boolean(state.image) && Boolean(state.tool));
   $(".stage-wrap").classList.toggle("adjust-active", panel === "adjust" && Boolean(state.image));
+  if (panel === "retouch" && !state.tool) $$(".retouch-tool").forEach((item) => item.classList.remove("active"));
 });
 $$(".preset").forEach((button) => button.onclick = () => {
   $$(".preset").forEach((b) => b.classList.remove("active")); button.classList.add("active");
@@ -329,6 +330,7 @@ $$(".retouch-tool").forEach((button) => button.onclick = () => {
   $$(".mask-tool").forEach((item) => item.classList.remove("active"));
   $("#cloneHelp").hidden = state.tool !== "clone";
   updateBlurControls();
+  $(".stage-wrap").classList.toggle("retouch-active", Boolean(state.tool) && $(".rail-tool.active")?.matches('[data-panel="retouch"]'));
   updateBrushCursor();
 });
 $$(".retouch-tab").forEach((button) => button.onclick = () => {
@@ -343,6 +345,7 @@ $$(".retouch-tab").forEach((button) => button.onclick = () => {
     updateBrushCursor();
   } else {
     state.tool = $(".retouch-tool.active")?.dataset.tool || null;
+    $(".stage-wrap").classList.toggle("retouch-active", Boolean(state.tool));
     updateBrushCursor();
   }
 });
