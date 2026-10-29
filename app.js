@@ -129,12 +129,16 @@ cropOverlay.onpointerdown = (event) => {
   if (handle) {
     state.cropResize = { handle: handle.dataset.handle, x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY, width, height };
   } else {
-    const rect = cropOverlay.getBoundingClientRect();
-    const edgeDistance = Math.min(event.clientX - rect.left, rect.right - event.clientX, event.clientY - rect.top, rect.bottom - event.clientY);
-    if (edgeDistance <= 18) {
+    if (state.cropRatio) {
       state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
     } else {
-      state.panStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
+      const rect = cropOverlay.getBoundingClientRect();
+      const edgeDistance = Math.min(event.clientX - rect.left, rect.right - event.clientX, event.clientY - rect.top, rect.bottom - event.clientY);
+      if (edgeDistance <= 18) {
+        state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
+      } else {
+        state.panStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
+      }
     }
   }
   event.stopPropagation();
