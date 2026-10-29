@@ -166,6 +166,8 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
   $("#panelTitle").textContent = panel === "crop" ? "Recadrer" : panel === "adjust" ? "Ajuster" : "Retouche";
   if (panel === "crop") {
     state.cropFrameVisible = Boolean(state.image);
+    state.panX = 0;
+    state.panY = 0;
     if (!Number($("#cropWidth").value) || !Number($("#cropHeight").value)) {
       fitCropToRenderedImage();
     }
@@ -186,7 +188,10 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
     updateBrushCursor();
   }
   draw();
-  if (panel === "crop") updateCropOverlay();
+  if (panel === "crop") {
+    updateCropOverlay();
+    requestAnimationFrame(() => updateCropOverlay());
+  }
 });
 $$(".preset").forEach((button) => button.onclick = () => {
   $$(".preset").forEach((b) => b.classList.remove("active")); button.classList.add("active");
@@ -194,6 +199,8 @@ $$(".preset").forEach((button) => button.onclick = () => {
   state.cropFrameVisible = Boolean(state.image);
   state.cropPresetName = button.querySelector("b")?.textContent || "Format personnalisé";
   state.cropRatio = null;
+  state.panX = 0;
+  state.panY = 0;
   if (state.image && ratio !== "free") {
     state.cropRatio = Number(ratio);
     let width = state.renderWidth;
@@ -215,6 +222,7 @@ $$(".preset").forEach((button) => button.onclick = () => {
   state.cropY = Math.max(0, Math.round((state.renderHeight - selectedHeight) / 2));
   draw();
   updateCropOverlay();
+  requestAnimationFrame(() => updateCropOverlay());
 });
 ["cropWidth", "cropHeight"].forEach((id) => $(`#${id}`).oninput = () => {
   const width = Number($("#cropWidth").value), height = Number($("#cropHeight").value);
@@ -222,11 +230,14 @@ $$(".preset").forEach((button) => button.onclick = () => {
     state.cropFrameVisible = Boolean(state.image);
     state.cropRatio = width / height;
     state.cropPresetName = "Format personnalisé";
+    state.panX = 0;
+    state.panY = 0;
     $$(".preset").forEach((button) => button.classList.remove("active"));
     state.cropX = Math.max(0, Math.round((canvas.width - width) / 2));
     state.cropY = Math.max(0, Math.round((canvas.height - height) / 2));
     draw();
     updateCropOverlay();
+    requestAnimationFrame(() => updateCropOverlay());
   }
 });
 const cropOverlay = $("#cropOverlay");
@@ -359,8 +370,9 @@ function updateCropOverlay() {
   state.cropX = x; state.cropY = y;
   overlay.style.width = `${Math.max(1, cropWidth)}px`;
   overlay.style.height = `${Math.max(1, cropHeight)}px`;
-  overlay.style.left = `${imageRect.left - stageRect.left + (stage.scrollLeft || 0) + (x + width / 2) * scale}px`;
-  overlay.style.top = `${imageRect.top - stageRect.top + (stage.scrollTop || 0) + (y + height / 2) * scale}px`;
+  overlay.style.left = `${imageRect.left - stageRect.left + (stage.scrollLeft || 0) + x * scale}px`;
+  overlay.style.top = `${imageRect.top - stageRect.top + (stage.scrollTop || 0) + y * scale}px`;
+  overlay.style.transform = "none";
   $("#cropPreviewLabel").textContent = `Aperçu — ${state.cropPresetName} · ${width} × ${height}`;
 }
 function commitCropDraft() {
@@ -370,6 +382,8 @@ function commitCropDraft() {
     frameVisible: state.cropFrameVisible,
     x: state.cropX,
     y: state.cropY,
+    panX: state.panX,
+    panY: state.panY,
     width: Number($("#cropWidth").value) || state.renderWidth,
     height: Number($("#cropHeight").value) || state.renderHeight,
   };
@@ -382,16 +396,22 @@ function restoreCommittedCrop() {
   state.cropFrameVisible = committed.frameVisible;
   state.cropX = committed.x;
   state.cropY = committed.y;
+  state.panX = committed.panX || 0;
+  state.panY = committed.panY || 0;
   $("#cropWidth").value = committed.width;
   $("#cropHeight").value = committed.height;
   $$(".preset").forEach((button) => {
     const name = button.querySelector("b")?.textContent;
     button.classList.toggle("active", name === committed.presetName);
   });
+  draw();
   updateCropOverlay();
+  requestAnimationFrame(() => updateCropOverlay());
 }
 function fitCropToRenderedImage() {
   if (!state.image) return;
+  state.panX = 0;
+  state.panY = 0;
   let width = state.renderWidth;
   let height = state.renderHeight;
   if (state.cropRatio) {
@@ -406,7 +426,9 @@ function fitCropToRenderedImage() {
   $("#cropHeight").value = height;
   state.cropX = Math.max(0, Math.round((state.renderWidth - width) / 2));
   state.cropY = Math.max(0, Math.round((state.renderHeight - height) / 2));
+  draw();
   updateCropOverlay();
+  requestAnimationFrame(() => updateCropOverlay());
 }
 function setStraighten(value) {
   const degrees = Math.max(-180, Math.min(180, Number(value) || 0));
