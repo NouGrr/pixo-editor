@@ -122,23 +122,19 @@ $$(".preset").forEach((button) => button.onclick = () => {
 });
 const cropOverlay = $("#cropOverlay");
 cropOverlay.onpointerdown = (event) => {
-  if (!state.image) return;
+  if (!state.image || event.button !== 0) return;
   const handle = event.target.closest(".crop-handle");
   const width = Number($("#cropWidth").value) || canvas.width;
   const height = Number($("#cropHeight").value) || canvas.height;
   if (handle) {
     state.cropResize = { handle: handle.dataset.handle, x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY, width, height };
   } else {
-    if (state.cropRatio) {
+    const rect = cropOverlay.getBoundingClientRect();
+    const edgeDistance = Math.min(event.clientX - rect.left, rect.right - event.clientX, event.clientY - rect.top, rect.bottom - event.clientY);
+    if (edgeDistance <= 18) {
       state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
     } else {
-      const rect = cropOverlay.getBoundingClientRect();
-      const edgeDistance = Math.min(event.clientX - rect.left, rect.right - event.clientX, event.clientY - rect.top, rect.bottom - event.clientY);
-      if (edgeDistance <= 18) {
-        state.cropStart = { x: event.clientX, y: event.clientY, cropX: state.cropX, cropY: state.cropY };
-      } else {
-        state.panStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
-      }
+      state.panStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
     }
   }
   event.stopPropagation();
@@ -566,7 +562,7 @@ function paintStroke(from, to) {
   }
 }
 canvas.onpointerdown = (event) => {
-  if (!state.image) return;
+  if (!state.image || event.button !== 0) return;
   const activePanel = $(".rail-tool.active")?.dataset.panel;
   const cropMode = activePanel === "crop";
   if (cropMode) {
