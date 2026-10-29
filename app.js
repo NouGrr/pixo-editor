@@ -42,11 +42,11 @@ function filterString() {
   return `brightness(${exposure}%) contrast(${contrast}%) saturate(${saturate}%) hue-rotate(${hue}deg) sepia(${warmth}%) ${sharpen}`;
 }
 function drawVignette(width, height) {
-  const amount = state.adjustments.vignette / 100;
+  const amount = Math.min(1, state.adjustments.vignette / 100);
   if (!amount) return;
-  const gradient = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * .2, width / 2, height / 2, Math.max(width, height) * .7);
+  const gradient = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * .06, width / 2, height / 2, Math.max(width, height) * .56);
   const color = $("#vignetteColor").value;
-  gradient.addColorStop(0, `${color}00`); gradient.addColorStop(.68, `${color}12`); gradient.addColorStop(1, `${color}${Math.round(amount * 220).toString(16).padStart(2, "0")}`);
+  gradient.addColorStop(0, `${color}00`); gradient.addColorStop(.48, `${color}${Math.round(amount * 38).toString(16).padStart(2, "0")}`); gradient.addColorStop(.78, `${color}${Math.round(amount * 150).toString(16).padStart(2, "0")}`); gradient.addColorStop(1, `${color}${Math.round(amount * 255).toString(16).padStart(2, "0")}`);
   ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, height); ctx.restore();
 }
 function loadFile(file) {
