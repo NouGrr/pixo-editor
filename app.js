@@ -26,7 +26,12 @@ function draw() {
   const width = Math.ceil(naturalWidth * state.imageScale);
   const height = Math.ceil(naturalHeight * state.imageScale);
   state.renderWidth = width; state.renderHeight = height;
-  canvas.width = width; canvas.height = height;
+  const sizeChanged = canvas.width !== width || canvas.height !== height;
+  if (sizeChanged) {
+    canvas.width = width; canvas.height = height;
+  } else {
+    ctx.clearRect(0, 0, width, height);
+  }
   if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
   ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
   ctx.filter = filterString(); ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2, image.naturalWidth, image.naturalHeight); ctx.restore();
@@ -34,6 +39,15 @@ function draw() {
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
   fitCanvasToStage();
   $("#imageInfo").textContent = `${canvas.width} × ${canvas.height}px`;
+}
+let drawFrame = 0;
+function scheduleDraw() {
+  if (drawFrame) return;
+  drawFrame = requestAnimationFrame(() => {
+    drawFrame = 0;
+    draw();
+    updateCropOverlay();
+  });
 }
 function fitCanvasToStage() {
   const stage = $(".stage-wrap");
@@ -189,7 +203,7 @@ cropOverlay.onpointermove = (event) => {
   }
   if (state.panStart) {
     updateImagePan(event, scale, true);
-    draw();
+    scheduleDraw();
     return;
   }
   if (!state.cropStart) return;
@@ -392,6 +406,14 @@ function updateAdjustmentControls() {
     if (output) output.textContent = key === "vignette" ? state.adjustments[key] : `${state.adjustments[key] > 0 ? "+" : ""}${state.adjustments[key]}`;
   });
 }
+function bakeAdjustmentsIntoRetouch() {
+  const hasAdjustments = Object.values(state.adjustments).some((value) => value !== 0);
+  if (!hasAdjustments) return;
+  Object.keys(state.adjustments).forEach((key) => { state.adjustments[key] = 0; });
+  $$(".look-button").forEach((button) => button.classList.remove("active"));
+  updateAdjustmentControls();
+}
+
 $$(".look-button").forEach((button) => button.onclick = () => {
   const values = looks[button.dataset.look];
   const isActive = button.classList.contains("active");
@@ -697,6 +719,7 @@ canvas.onpointerdown = (event) => {
   }
   if (activePanel !== "retouch") return;
   if (!["heal", "clone", "blur", "sharpen", "density"].includes(state.tool)) return;
+  bakeAdjustmentsIntoRetouch();
   const p = point(event);
   if (state.tool === "clone" && event.altKey) {
     state.cloneSource = p; state.cloneBuffer = document.createElement("canvas"); state.cloneBuffer.width = canvas.width; state.cloneBuffer.height = canvas.height;
@@ -717,7 +740,7 @@ canvas.onpointermove = (event) => {
     const scale = canvas.getBoundingClientRect().width / state.zoom / canvas.width || 1;
     const cropMode = $(".rail-tool.active")?.dataset.panel === "crop";
     updateImagePan(event, scale, cropMode);
-    draw();
+    scheduleDraw();
     return;
   }
   if (!state.painting) return;
