@@ -567,12 +567,14 @@ function paintStroke(from, to) {
 }
 canvas.onpointerdown = (event) => {
   if (!state.image) return;
-  const cropMode = $(".rail-tool.active")?.matches('[data-panel="crop"]');
+  const activePanel = $(".rail-tool.active")?.dataset.panel;
+  const cropMode = activePanel === "crop";
   if (cropMode) {
     state.panStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
     canvas.setPointerCapture(event.pointerId);
     return;
   }
+  if (activePanel !== "retouch") return;
   const p = point(event);
   if (state.tool === "clone" && event.altKey) {
     state.cloneSource = p; state.cloneBuffer = document.createElement("canvas"); state.cloneBuffer.width = canvas.width; state.cloneBuffer.height = canvas.height;
