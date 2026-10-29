@@ -19,10 +19,12 @@ function snapshot() {
 function draw() {
   if (!state.image) return;
   const image = state.image;
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
   const angle = (state.rotation + state.straighten) * Math.PI / 180;
   const c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
-  const naturalWidth = image.naturalWidth * c + image.naturalHeight * s;
-  const naturalHeight = image.naturalWidth * s + image.naturalHeight * c;
+  const naturalWidth = sourceWidth * c + sourceHeight * s;
+  const naturalHeight = sourceWidth * s + sourceHeight * c;
   const width = Math.ceil(naturalWidth * state.imageScale);
   const height = Math.ceil(naturalHeight * state.imageScale);
   state.renderWidth = width; state.renderHeight = height;
@@ -34,7 +36,7 @@ function draw() {
   }
   if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
   ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
-  ctx.filter = filterString(); ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2, image.naturalWidth, image.naturalHeight); ctx.restore();
+  ctx.filter = filterString(); ctx.drawImage(image, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight); ctx.restore();
   drawVignette(width, height);
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
   fitCanvasToStage();
@@ -409,9 +411,22 @@ function updateAdjustmentControls() {
 function bakeAdjustmentsIntoRetouch() {
   const hasAdjustments = Object.values(state.adjustments).some((value) => value !== 0);
   if (!hasAdjustments) return;
+  const bakedImage = document.createElement("canvas");
+  bakedImage.width = canvas.width;
+  bakedImage.height = canvas.height;
+  bakedImage.getContext("2d").drawImage(canvas, 0, 0);
+  state.image = bakedImage;
+  state.imageScale = 1;
+  state.rotation = 0;
+  state.straighten = 0;
+  state.flipX = 1;
+  state.flipY = 1;
+  state.panX = 0;
+  state.panY = 0;
   Object.keys(state.adjustments).forEach((key) => { state.adjustments[key] = 0; });
   $$(".look-button").forEach((button) => button.classList.remove("active"));
   updateAdjustmentControls();
+  draw();
 }
 
 $$(".look-button").forEach((button) => button.onclick = () => {
@@ -585,6 +600,7 @@ $("#downloadConverted").onclick = async () => {
   }
 };
 function paintAt(p) {
+  ctx.filter = "none";
   if (state.maskMode && state.cutoutBase) {
     const radius = state.brushSize / 2;
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
