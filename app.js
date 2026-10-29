@@ -167,17 +167,35 @@ function updateCropOverlay() {
   overlay.style.top = `${imageRect.top - stageRect.top + (y + height / 2) * scale}px`;
   $("#cropPreviewLabel").textContent = `Aperçu — ${state.cropPresetName} · ${width} × ${height}`;
 }
+function fitCropToRenderedImage() {
+  if (!state.image) return;
+  let width = state.renderWidth;
+  let height = state.renderHeight;
+  if (state.cropRatio) {
+    width = state.renderWidth;
+    height = Math.round(width / state.cropRatio);
+    if (height > state.renderHeight) {
+      height = state.renderHeight;
+      width = Math.round(height * state.cropRatio);
+    }
+  }
+  $("#cropWidth").value = width;
+  $("#cropHeight").value = height;
+  state.cropX = Math.max(0, Math.round((state.renderWidth - width) / 2));
+  state.cropY = Math.max(0, Math.round((state.renderHeight - height) / 2));
+  updateCropOverlay();
+}
 function setStraighten(value) {
   const degrees = Math.max(-180, Math.min(180, Number(value) || 0));
   state.straighten = degrees;
   $("#straightenRange").value = degrees;
   $("#straightenDegrees").value = degrees;
   draw();
-  updateCropOverlay();
+  fitCropToRenderedImage();
 }
 $("#straightenRange").oninput = (e) => setStraighten(e.target.value);
 $("#straightenDegrees").oninput = (e) => setStraighten(e.target.value);
-["rotateLeft", "rotateRight"].forEach((id) => $(`#${id}`).onclick = () => { state.rotation += id === "rotateLeft" ? -90 : 90; draw(); snapshot(); });
+["rotateLeft", "rotateRight"].forEach((id) => $(`#${id}`).onclick = () => { state.rotation += id === "rotateLeft" ? -90 : 90; draw(); fitCropToRenderedImage(); snapshot(); });
 $("#flipHorizontal").onclick = () => { state.flipX *= -1; draw(); snapshot(); };
 $("#flipVertical").onclick = () => { state.flipY *= -1; draw(); snapshot(); };
 $("#applyCrop").onclick = () => {
