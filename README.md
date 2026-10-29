@@ -2,13 +2,13 @@
 
 Pixo est un éditeur photo directement utilisable dans le navigateur. Il fonctionne côté client : les images importées restent dans le navigateur et aucune installation n'est nécessaire.
 
-## Ouvrir Pixo
+## Ouvrir Pixo en ligne
 
 👉 [Ouvrir Pixo](https://nougrr.github.io/pixo-editor/)
 
 ## Utilisation rapide
 
-1. Ouvrez [Pixo](https://nougrr.github.io/pixo-editor/).
+1. Ouvrez [la nouvelle version de Pixo](https://nougrr.github.io/pixo-editor/).
 2. Cliquez sur **Choisir une image**, ou déposez une image dans la zone centrale.
 3. Sélectionnez une catégorie dans la barre de gauche :
    - **Recadrer** ;
