@@ -3,7 +3,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const canvas = $("#canvas");
 const ctx = canvas.getContext("2d");
 const state = {
-  image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1,
+  image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1, retouchImageBaked: false,
   adjustments: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, clarity: 0, dehaze: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0, sharpness: 0, vignette: 0 },
   straighten: 0, cropRatio: null, cropPresetName: "Libre", imageScale: 1, cropFrameVisible: false, cropCommitted: null, cropImageLocked: true, renderWidth: 0, renderHeight: 0, cropX: 0, cropY: 0, cropStart: null, cropResize: null, panX: 0, panY: 0, panStart: null, tool: "heal", densityMode: "lighten", densityAmount: .35, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
 };
@@ -37,10 +37,10 @@ function draw() {
   if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
   ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
   const retouchActive = $(".rail-tool.active")?.matches('[data-panel="retouch"]');
-  ctx.filter = retouchActive ? "none" : filterString();
+  ctx.filter = retouchActive || state.retouchImageBaked ? "none" : filterString();
   ctx.drawImage(image, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight);
   ctx.restore();
-  if (!retouchActive) drawVignette(width, height);
+  if (!retouchActive && !state.retouchImageBaked) drawVignette(width, height);
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
   fitCanvasToStage();
   $("#imageInfo").textContent = `${canvas.width} × ${canvas.height}px`;
@@ -86,6 +86,7 @@ function loadFile(file) {
   const image = new Image();
   image.onload = () => {
     state.image = image; state.fileName = file.name; state.history = []; state.historyIndex = -1;
+    state.retouchImageBaked = false;
     state.imageScale = 1; state.zoom = 1; state.panX = 0; state.panY = 0;
     state.rotation = 0; state.straighten = 0; state.flipX = 1; state.flipY = 1;
     canvas.style.transform = "scale(1)";
@@ -122,6 +123,7 @@ window.addEventListener("resize", fitCanvasToStage);
 $$(".rail-tool").forEach((button) => button.onclick = () => {
   const previousPanel = $(".rail-tool.active")?.dataset.panel;
   if (previousPanel === "crop" && button.dataset.panel !== "crop") restoreCommittedCrop();
+  if (button.dataset.panel === "retouch") prepareRetouchImage();
   $$(".rail-tool").forEach((b) => b.classList.remove("active")); button.classList.add("active");
   const panel = button.dataset.panel;
   $$(".panel").forEach((p) => p.hidden = p.dataset.content !== panel);
@@ -130,7 +132,6 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
   $(".stage-wrap").classList.toggle("retouch-active", panel === "retouch" && Boolean(state.image) && Boolean(state.tool));
   $(".stage-wrap").classList.toggle("adjust-active", panel === "adjust" && Boolean(state.image));
   $(".stage-wrap").classList.toggle("crop-active", panel === "crop" && Boolean(state.image));
-  if (panel === "retouch") disableAdjustmentsForRetouch();
   if (panel === "retouch") {
     if (!state.tool) state.tool = "heal";
     $$(".retouch-tool").forEach((item) => item.classList.toggle("active", item.dataset.tool === state.tool));
@@ -413,10 +414,22 @@ function updateAdjustmentControls() {
     if (output) output.textContent = key === "vignette" ? state.adjustments[key] : `${state.adjustments[key] > 0 ? "+" : ""}${state.adjustments[key]}`;
   });
 }
-function disableAdjustmentsForRetouch() {
-  Object.keys(state.adjustments).forEach((key) => { state.adjustments[key] = 0; });
-  $$(".look-button").forEach((button) => button.classList.remove("active"));
-  updateAdjustmentControls();
+function prepareRetouchImage() {
+  if (!state.image || state.retouchImageBaked) return;
+  draw();
+  const bakedImage = document.createElement("canvas");
+  bakedImage.width = canvas.width;
+  bakedImage.height = canvas.height;
+  bakedImage.getContext("2d").drawImage(canvas, 0, 0);
+  state.image = bakedImage;
+  state.imageScale = 1;
+  state.rotation = 0;
+  state.straighten = 0;
+  state.flipX = 1;
+  state.flipY = 1;
+  state.panX = 0;
+  state.panY = 0;
+  state.retouchImageBaked = true;
   draw();
 }
 
