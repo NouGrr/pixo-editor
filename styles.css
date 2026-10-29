@@ -48,10 +48,7 @@ button { cursor: pointer; color: inherit; border: 0; }
 .plain-button { padding: 7px 9px; border-radius: 5px; font-size: 12px; }
 .compact { width: 28px; height: 28px; font-size: 16px; }
 .stage-wrap { position: relative; display: grid; place-items: center; flex: 1; min-height: 0; margin: 0 18px; border: 1px dashed #303441; border-radius: 10px; overflow: hidden; background: repeating-conic-gradient(#151720 0% 25%, #12131a 0% 50%) 50% / 20px 20px; }
-.stage-wrap.is-zoomed { overflow: auto; }
-.stage-wrap.adjust-active { overflow: scroll; }
-.stage-wrap.crop-active { display: block; overflow: auto; }
-.stage-wrap.crop-active #canvas { margin: 10px auto; }
+.stage-wrap.is-zoomed, .stage-wrap.adjust-active, .stage-wrap.crop-active { overflow: auto; }
 .processing-overlay { position: absolute; z-index: 5; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text); background: #0c0d12d9; backdrop-filter: blur(5px); }.processing-overlay[hidden] { display: none; }.processing-star { color: var(--accent); font-size: 42px; animation: pixo-spin .9s linear infinite; }@keyframes pixo-spin { to { transform: rotate(360deg); } }
 #canvas { width: auto; height: auto; max-width: none; max-height: none; display: none; box-shadow: 0 18px 50px #0008; touch-action: none; }
 .stage-wrap:not(.retouch-active) #canvas { cursor: grab; }

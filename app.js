@@ -3,7 +3,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const canvas = $("#canvas");
 const ctx = canvas.getContext("2d");
 const state = {
-  image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1, retouchImageBaked: false,
+  image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1,
   adjustments: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, clarity: 0, dehaze: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0, sharpness: 0, vignette: 0 },
   straighten: 0, cropRatio: null, cropPresetName: "Libre", imageScale: 1, cropFrameVisible: false, cropCommitted: null, cropImageLocked: true, renderWidth: 0, renderHeight: 0, cropX: 0, cropY: 0, cropStart: null, cropResize: null, panX: 0, panY: 0, panStart: null, tool: "heal", densityMode: "lighten", densityAmount: .35, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
 };
@@ -16,7 +16,7 @@ function snapshot() {
   $("#undoButton").disabled = state.historyIndex < 1;
   $("#redoButton").disabled = true;
 }
-function draw() {
+function draw(bypassFilter = false) {
   if (!state.image) return;
   const image = state.image;
   const sourceWidth = image.naturalWidth || image.width;
@@ -37,10 +37,10 @@ function draw() {
   if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
   ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
   const retouchActive = $(".rail-tool.active")?.matches('[data-panel="retouch"]');
-  ctx.filter = retouchActive ? "none" : filterString();
+  ctx.filter = (bypassFilter || retouchActive) ? "none" : filterString();
   ctx.drawImage(image, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight);
   ctx.restore();
-  if (!retouchActive) drawVignette(width, height);
+  if (!bypassFilter && !retouchActive) drawVignette(width, height);
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
   fitCanvasToStage();
   $("#imageInfo").textContent = `${canvas.width} × ${canvas.height}px`;
@@ -86,7 +86,6 @@ function loadFile(file) {
   const image = new Image();
   image.onload = () => {
     state.image = image; state.fileName = file.name; state.history = []; state.historyIndex = -1;
-    state.retouchImageBaked = false;
     state.imageScale = 1; state.zoom = 1; state.panX = 0; state.panY = 0;
     state.rotation = 0; state.straighten = 0; state.flipX = 1; state.flipY = 1;
     canvas.style.transform = "scale(1)";
@@ -123,15 +122,23 @@ window.addEventListener("resize", fitCanvasToStage);
 $$(".rail-tool").forEach((button) => button.onclick = () => {
   const previousPanel = $(".rail-tool.active")?.dataset.panel;
   if (previousPanel === "crop" && button.dataset.panel !== "crop") restoreCommittedCrop();
-  if (button.dataset.panel === "retouch") prepareRetouchImage();
   $$(".rail-tool").forEach((b) => b.classList.remove("active")); button.classList.add("active");
   const panel = button.dataset.panel;
   $$(".panel").forEach((p) => p.hidden = p.dataset.content !== panel);
   $("#panelTitle").textContent = panel === "crop" ? "Recadrer" : panel === "adjust" ? "Ajuster" : "Retouche";
+  if (panel === "crop") {
+    state.cropFrameVisible = Boolean(state.image);
+    if (!Number($("#cropWidth").value) || !Number($("#cropHeight").value)) {
+      fitCropToRenderedImage();
+    }
+  }
   $("#cropOverlay").hidden = panel !== "crop" || !state.image || !state.cropFrameVisible;
   $(".stage-wrap").classList.toggle("retouch-active", panel === "retouch" && Boolean(state.image) && Boolean(state.tool));
   $(".stage-wrap").classList.toggle("adjust-active", panel === "adjust" && Boolean(state.image));
   $(".stage-wrap").classList.toggle("crop-active", panel === "crop" && Boolean(state.image));
+  if (panel === "adjust") {
+    updateAdjustmentControls();
+  }
   if (panel === "retouch") {
     if (!state.tool) state.tool = "heal";
     $$(".retouch-tool").forEach((item) => item.classList.toggle("active", item.dataset.tool === state.tool));
@@ -140,6 +147,8 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
     $(".stage-wrap").classList.add("retouch-active");
     updateBrushCursor();
   }
+  draw();
+  if (panel === "crop") updateCropOverlay();
 });
 $$(".preset").forEach((button) => button.onclick = () => {
   $$(".preset").forEach((b) => b.classList.remove("active")); button.classList.add("active");
@@ -298,17 +307,13 @@ function updateCropOverlay() {
     width: transformedRect.width / state.zoom,
     height: transformedRect.height / state.zoom,
   };
-  const stageRect = $(".stage-wrap").getBoundingClientRect();
+  const stage = $(".stage-wrap");
+  const stageRect = stage.getBoundingClientRect();
   const scale = imageRect.width / canvas.width || 1;
   let width = Number($("#cropWidth").value) || canvas.width;
   let height = Number($("#cropHeight").value) || canvas.height;
-  if (state.cropRatio) {
-    width = Math.min(width, canvas.width);
-    height = Math.min(height, canvas.height);
-  } else {
-    width = Math.min(width, canvas.width);
-    height = Math.min(height, canvas.height);
-  }
+  width = Math.min(width, canvas.width);
+  height = Math.min(height, canvas.height);
   const cropWidth = width * scale;
   const cropHeight = height * scale;
   const x = Math.max(0, Math.min(canvas.width - width, state.cropX));
@@ -316,8 +321,8 @@ function updateCropOverlay() {
   state.cropX = x; state.cropY = y;
   overlay.style.width = `${Math.max(1, cropWidth)}px`;
   overlay.style.height = `${Math.max(1, cropHeight)}px`;
-  overlay.style.left = `${imageRect.left - stageRect.left + (x + width / 2) * scale}px`;
-  overlay.style.top = `${imageRect.top - stageRect.top + (y + height / 2) * scale}px`;
+  overlay.style.left = `${imageRect.left - stageRect.left + (stage.scrollLeft || 0) + (x + width / 2) * scale}px`;
+  overlay.style.top = `${imageRect.top - stageRect.top + (stage.scrollTop || 0) + (y + height / 2) * scale}px`;
   $("#cropPreviewLabel").textContent = `Aperçu — ${state.cropPresetName} · ${width} × ${height}`;
 }
 function commitCropDraft() {
@@ -380,6 +385,7 @@ $("#flipHorizontal").onclick = () => { state.flipX *= -1; draw(); snapshot(); };
 $("#flipVertical").onclick = () => { state.flipY *= -1; draw(); snapshot(); };
 $("#applyCrop").onclick = () => {
   if (!state.image) return;
+  draw(true);
   const width = Math.max(1, Number($("#cropWidth").value)), height = Math.max(1, Number($("#cropHeight").value));
   const cropCanvas = document.createElement("canvas");
   cropCanvas.width = Math.min(width, canvas.width); cropCanvas.height = Math.min(height, canvas.height);
@@ -391,7 +397,11 @@ $("#applyCrop").onclick = () => {
     state.image = image; state.imageScale = 1; state.cropImageLocked = true; state.rotation = 0; state.straighten = 0; state.panX = 0; state.panY = 0;
     state.cropRatio = null; state.cropPresetName = "Libre"; state.cropFrameVisible = false;
     $("#straightenRange").value = 0; $("#straightenDegrees").value = 0;
-    draw(); $("#cropWidth").value = canvas.width; $("#cropHeight").value = canvas.height;
+    $$(".preset").forEach((b) => b.classList.toggle("active", b.dataset.ratio === "free"));
+    draw();
+    $("#cropWidth").value = canvas.width; $("#cropHeight").value = canvas.height;
+    state.cropX = 0; state.cropY = 0;
+    fitCropToRenderedImage();
     commitCropDraft(); snapshot();
   };
   image.src = source;
@@ -414,33 +424,7 @@ function updateAdjustmentControls() {
     if (output) output.textContent = key === "vignette" ? state.adjustments[key] : `${state.adjustments[key] > 0 ? "+" : ""}${state.adjustments[key]}`;
   });
 }
-function hasNonZeroAdjustments() {
-  return Object.values(state.adjustments).some((v) => v !== 0);
-}
-function prepareRetouchImage() {
-  if (!state.image) return;
-  if (state.retouchImageBaked && !hasNonZeroAdjustments()) return;
-  draw();
-  const bakedImage = document.createElement("canvas");
-  bakedImage.width = canvas.width;
-  bakedImage.height = canvas.height;
-  bakedImage.getContext("2d").drawImage(canvas, 0, 0);
-  state.image = bakedImage;
-  state.imageScale = 1;
-  state.rotation = 0;
-  state.straighten = 0;
-  state.flipX = 1;
-  state.flipY = 1;
-  state.panX = 0;
-  state.panY = 0;
-  state.retouchImageBaked = true;
-  Object.keys(state.adjustments).forEach((key) => {
-    state.adjustments[key] = 0;
-    const input = $(`#${key}`); if (input) input.value = 0;
-    const output = $(`#${key}Output`); if (output) output.textContent = "0";
-  });
-  draw();
-}
+
 
 $$(".look-button").forEach((button) => button.onclick = () => {
   if ($(".rail-tool.active")?.matches('[data-panel="retouch"]')) return;
