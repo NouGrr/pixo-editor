@@ -392,6 +392,12 @@ function commitCanvas() {
   image.onload = () => { state.image = image; draw(); snapshot(); };
   image.src = canvas.toDataURL("image/png");
 }
+function showProcessing() {
+  $("#processingOverlay").hidden = false;
+}
+function hideProcessing() {
+  $("#processingOverlay").hidden = true;
+}
 function create4KPreview() {
   if (!state.image) throw new Error("Importez une image avant de créer un aperçu.");
   const scale = Math.min(3840 / canvas.width, 3840 / canvas.height);
@@ -405,7 +411,9 @@ function create4KPreview() {
   outputContext.drawImage(canvas, 0, 0, targetWidth, targetHeight);
   return output;
 }
-$("#preview4K").onclick = () => {
+$("#preview4K").onclick = async () => {
+  showProcessing();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
   try {
     state.upscaleCanvas = create4KPreview();
     if (state.upscaleUrl) URL.revokeObjectURL(state.upscaleUrl);
@@ -415,16 +423,24 @@ $("#preview4K").onclick = () => {
     $("#previewModal").hidden = false;
   } catch (error) {
     $("#canvasHint").textContent = error.message;
+  } finally {
+    hideProcessing();
   }
 };
 $("#closePreview").onclick = () => { $("#previewModal").hidden = true; };
 $("#previewModal").onclick = (event) => { if (event.target === $("#previewModal")) $("#previewModal").hidden = true; };
-$("#download4K").onclick = () => {
+$("#download4K").onclick = async () => {
   if (!state.upscaleCanvas) return;
-  const link = document.createElement("a");
-  link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo-4k.png`;
-  link.href = state.upscaleCanvas.toDataURL("image/png");
-  link.click();
+  showProcessing();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  try {
+    const link = document.createElement("a");
+    link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo-4k.png`;
+    link.href = state.upscaleCanvas.toDataURL("image/png");
+    link.click();
+  } finally {
+    hideProcessing();
+  }
 };
 const convertTypes = {
   png: { mime: "image/png", extension: "png", label: "PNG" },
@@ -443,15 +459,21 @@ function updateConvertInfo() {
 }
 $("#convertFormat").onchange = updateConvertInfo;
 $("#convertQuality").oninput = () => { $("#convertQualityOutput").textContent = `${$("#convertQuality").value}%`; updateConvertInfo(); };
-$("#downloadConverted").onclick = () => {
+$("#downloadConverted").onclick = async () => {
   if (!state.image) return;
-  const type = convertTypes[$("#convertFormat").value];
-  const quality = Number($("#convertQuality").value) / 100;
-  const dataUrl = canvas.toDataURL(type.mime, quality);
-  const link = document.createElement("a");
-  link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo.${type.extension}`;
-  link.href = dataUrl;
-  link.click();
+  showProcessing();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  try {
+    const type = convertTypes[$("#convertFormat").value];
+    const quality = Number($("#convertQuality").value) / 100;
+    const dataUrl = canvas.toDataURL(type.mime, quality);
+    const link = document.createElement("a");
+    link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo.${type.extension}`;
+    link.href = dataUrl;
+    link.click();
+  } finally {
+    hideProcessing();
+  }
 };
 function paintAt(p) {
   if (state.maskMode && state.cutoutBase) {
@@ -699,8 +721,7 @@ async function applyImglyCutout() {
   const sourceBlob = await new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Impossible de préparer l’image")), "image/png"));
   const resultBlob = await removeBackground(sourceBlob, {
     progress: (_key, current, total) => {
-      const percent = total ? Math.round((current / total) * 100) : 0;
-      $("#processingProgress").textContent = percent ? `IMG.LY — ${percent}%` : "Chargement du modèle IA";
+      void current; void total;
     },
   });
   const resultUrl = URL.createObjectURL(resultBlob);
@@ -723,32 +744,25 @@ async function applyImglyCutout() {
 $("#autoCutout").onclick = async () => {
   if (!state.image) return;
   state.maskMode = null;
-  const overlay = $("#processingOverlay");
-  overlay.hidden = false;
-  $("#processingLabel").textContent = "Détourage IA IMG.LY…";
-  $("#processingProgress").textContent = "Chargement du modèle IA";
+  showProcessing();
   $("#autoCutout").disabled = true;
   try {
     await applyImglyCutout();
   } catch (error) {
     console.error(error);
-    $("#processingProgress").textContent = "IMG.LY indisponible — détourage local";
     $("#canvasHint").textContent = `${error.message}. Utilisation du détourage local.`;
     if (!state.cutoutBase) state.cutoutBase = ctx.getImageData(0, 0, canvas.width, canvas.height);
     state.cutoutEngine = "local";
     await applyCutout(state.cutoutBase, true);
   } finally {
-    overlay.hidden = true;
+    hideProcessing();
     $("#autoCutout").disabled = false;
   }
 };
 async function applyCutout(sourcePixels, persist = true) {
   state.cutoutEngine = "local";
   const run = ++cutoutRun;
-  const overlay = $("#processingOverlay");
-  overlay.hidden = false;
-  $("#processingLabel").textContent = "Détourage en cours…";
-  $("#processingProgress").textContent = "Analyse de l’arrière-plan";
+  showProcessing();
   $("#autoCutout").disabled = true;
   const pixels = new ImageData(new Uint8ClampedArray(sourcePixels.data), sourcePixels.width, sourcePixels.height);
   const { width, height } = pixels;
@@ -850,7 +864,6 @@ async function applyCutout(sourcePixels, persist = true) {
   while (head < tail) {
     processBatch();
     if (run !== cutoutRun) return;
-    $("#processingProgress").textContent = `Analyse ${Math.min(99, Math.round((head / Math.max(1, tail)) * 100))}%`;
     await new Promise((resolve) => requestAnimationFrame(resolve));
   }
   if (run !== cutoutRun) return;
@@ -884,7 +897,7 @@ async function applyCutout(sourcePixels, persist = true) {
     $("#canvasHint").textContent = "Arrière-plan retiré — affinez avec le pinceau";
   }
   ctx.putImageData(pixels, 0, 0);
-  overlay.hidden = true;
+  hideProcessing();
   $("#autoCutout").disabled = false;
   if (persist) commitCanvas();
 }
@@ -910,4 +923,16 @@ function restoreHistory(index) {
 $("#undoButton").onclick = () => { if (state.historyIndex > 0) restoreHistory(state.historyIndex - 1); };
 $("#redoButton").onclick = () => { if (state.historyIndex < state.history.length - 1) restoreHistory(state.historyIndex + 1); };
 $("#resetButton").onclick = () => location.reload();
-$("#exportButton").onclick = () => { if (!state.image) return; const link = document.createElement("a"); link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo.png`; link.href = canvas.toDataURL("image/png"); link.click(); };
+$("#exportButton").onclick = async () => {
+  if (!state.image) return;
+  showProcessing();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  try {
+    const link = document.createElement("a");
+    link.download = `${state.fileName.replace(/\.[^.]+$/, "")}-pixo.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  } finally {
+    hideProcessing();
+  }
+};
