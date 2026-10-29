@@ -101,7 +101,10 @@ $$(".preset").forEach((button) => button.onclick = () => {
     $("#cropWidth").value = Math.max(1, Math.round(state.renderWidth * .9));
     $("#cropHeight").value = Math.max(1, Math.round(state.renderHeight * .9));
   }
-  state.cropX = 0; state.cropY = 0;
+  const selectedWidth = Number($("#cropWidth").value) || state.renderWidth;
+  const selectedHeight = Number($("#cropHeight").value) || state.renderHeight;
+  state.cropX = Math.max(0, Math.round((state.renderWidth - selectedWidth) / 2));
+  state.cropY = Math.max(0, Math.round((state.renderHeight - selectedHeight) / 2));
   draw();
   updateCropOverlay();
 });
@@ -164,7 +167,16 @@ function updateCropOverlay() {
   overlay.style.top = `${imageRect.top - stageRect.top + (y + height / 2) * scale}px`;
   $("#cropPreviewLabel").textContent = `Aperçu — ${state.cropPresetName} · ${width} × ${height}`;
 }
-$("#straightenRange").oninput = (e) => { state.straighten = Number(e.target.value); $("#straightenOutput").textContent = `${state.straighten}°`; draw(); };
+function setStraighten(value) {
+  const degrees = Math.max(-180, Math.min(180, Number(value) || 0));
+  state.straighten = degrees;
+  $("#straightenRange").value = degrees;
+  $("#straightenDegrees").value = degrees;
+  draw();
+  updateCropOverlay();
+}
+$("#straightenRange").oninput = (e) => setStraighten(e.target.value);
+$("#straightenDegrees").oninput = (e) => setStraighten(e.target.value);
 ["rotateLeft", "rotateRight"].forEach((id) => $(`#${id}`).onclick = () => { state.rotation += id === "rotateLeft" ? -90 : 90; draw(); snapshot(); });
 $("#flipHorizontal").onclick = () => { state.flipX *= -1; draw(); snapshot(); };
 $("#flipVertical").onclick = () => { state.flipY *= -1; draw(); snapshot(); };
@@ -177,7 +189,7 @@ $("#applyCrop").onclick = () => {
   const sy = Math.max(0, Math.min(canvas.height - cropCanvas.height, Math.round(state.cropY)));
   cropCanvas.getContext("2d").drawImage(canvas, sx, sy, cropCanvas.width, cropCanvas.height, 0, 0, cropCanvas.width, cropCanvas.height);
   const source = cropCanvas.toDataURL("image/png"), image = new Image();
-  image.onload = () => { state.image = image; state.rotation = 0; state.straighten = 0; state.panX = 0; state.panY = 0; $("#straightenRange").value = 0; $("#straightenOutput").textContent = "0°"; draw(); snapshot(); };
+  image.onload = () => { state.image = image; state.rotation = 0; state.straighten = 0; state.panX = 0; state.panY = 0; $("#straightenRange").value = 0; $("#straightenDegrees").value = 0; draw(); snapshot(); };
   image.src = source;
 };
 $$(".adjustment").forEach((input) => input.oninput = () => {
