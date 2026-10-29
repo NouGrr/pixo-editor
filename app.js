@@ -5,7 +5,7 @@ const ctx = canvas.getContext("2d");
 const state = {
   image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1,
   adjustments: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, clarity: 0, dehaze: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0, sharpness: 0, vignette: 0 },
-  straighten: 0, cropRatio: null, cropPresetName: "Libre", imageScale: 1, cropFrameVisible: false, cropCommitted: null, cropImageLocked: true, renderWidth: 0, renderHeight: 0, cropX: 0, cropY: 0, cropStart: null, cropResize: null, panX: 0, panY: 0, panStart: null, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
+  straighten: 0, cropRatio: null, cropPresetName: "Libre", imageScale: 1, cropFrameVisible: false, cropCommitted: null, cropImageLocked: true, renderWidth: 0, renderHeight: 0, cropX: 0, cropY: 0, cropStart: null, cropResize: null, panX: 0, panY: 0, panStart: null, tool: "heal", densityMode: "lighten", densityAmount: .35, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
 };
 
 function snapshot() {
@@ -18,7 +18,6 @@ function snapshot() {
 }
 function draw() {
   if (!state.image) return;
-  if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
   const image = state.image;
   const angle = (state.rotation + state.straighten) * Math.PI / 180;
   const c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
@@ -28,6 +27,7 @@ function draw() {
   const height = Math.ceil(naturalHeight * state.imageScale);
   state.renderWidth = width; state.renderHeight = height;
   canvas.width = width; canvas.height = height;
+  if ($(".rail-tool.active")?.matches('[data-panel="crop"]')) clampCropPan();
   ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.imageScale, state.flipY * state.imageScale);
   ctx.filter = filterString(); ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2, image.naturalWidth, image.naturalHeight); ctx.restore();
   drawVignette(width, height);
@@ -67,7 +67,10 @@ function loadFile(file) {
   const image = new Image();
   image.onload = () => {
     state.image = image; state.fileName = file.name; state.history = []; state.historyIndex = -1;
-    state.imageScale = 1;
+    state.imageScale = 1; state.zoom = 1; state.panX = 0; state.panY = 0;
+    state.rotation = 0; state.straighten = 0; state.flipX = 1; state.flipY = 1;
+    canvas.style.transform = "scale(1)";
+    $("#zoomValue").textContent = "100%";
     state.cropFrameVisible = false; state.cropRatio = null; state.cropPresetName = "Libre"; state.cropX = 0; state.cropY = 0;
     state.cropImageLocked = true;
     state.cutoutBase = null; state.cutoutEngine = null;
@@ -108,7 +111,14 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
   $(".stage-wrap").classList.toggle("retouch-active", panel === "retouch" && Boolean(state.image) && Boolean(state.tool));
   $(".stage-wrap").classList.toggle("adjust-active", panel === "adjust" && Boolean(state.image));
   $(".stage-wrap").classList.toggle("crop-active", panel === "crop" && Boolean(state.image));
-  if (panel === "retouch" && !state.tool) $$(".retouch-tool").forEach((item) => item.classList.remove("active"));
+  if (panel === "retouch") {
+    if (!state.tool) state.tool = "heal";
+    $$(".retouch-tool").forEach((item) => item.classList.toggle("active", item.dataset.tool === state.tool));
+    $("#cloneHelp").hidden = state.tool !== "clone";
+    updateBlurControls();
+    $(".stage-wrap").classList.add("retouch-active");
+    updateBrushCursor();
+  }
 });
 $$(".preset").forEach((button) => button.onclick = () => {
   $$(".preset").forEach((b) => b.classList.remove("active")); button.classList.add("active");
@@ -404,7 +414,9 @@ $$(".retouch-tool").forEach((button) => button.onclick = () => {
   state.maskMode = null;
   $$(".mask-tool").forEach((item) => item.classList.remove("active"));
   $("#cloneHelp").hidden = state.tool !== "clone";
+  if (state.tool !== "clone") { state.cloneSource = null; state.cloneBuffer = null; }
   updateBlurControls();
+  if (state.tool) $("#canvasHint").textContent = `${button.querySelector("b")?.textContent || "Outil"} sélectionné — peignez sur l’image`;
   $(".stage-wrap").classList.toggle("retouch-active", Boolean(state.tool) && $(".rail-tool.active")?.matches('[data-panel="retouch"]'));
   updateBrushCursor();
 });
@@ -674,6 +686,7 @@ function paintStroke(from, to) {
 }
 canvas.onpointerdown = (event) => {
   if (!state.image || event.button !== 0) return;
+  event.preventDefault();
   const activePanel = $(".rail-tool.active")?.dataset.panel;
   const cropMode = activePanel === "crop";
   const navigationMode = cropMode || activePanel === "adjust" || (activePanel === "retouch" && !state.tool);
@@ -683,6 +696,7 @@ canvas.onpointerdown = (event) => {
     return;
   }
   if (activePanel !== "retouch") return;
+  if (!["heal", "clone", "blur", "sharpen", "density"].includes(state.tool)) return;
   const p = point(event);
   if (state.tool === "clone" && event.altKey) {
     state.cloneSource = p; state.cloneBuffer = document.createElement("canvas"); state.cloneBuffer.width = canvas.width; state.cloneBuffer.height = canvas.height;
@@ -701,6 +715,7 @@ canvas.onpointermove = (event) => {
   updateBrushCursor(event);
   if (state.panStart) {
     const scale = canvas.getBoundingClientRect().width / state.zoom / canvas.width || 1;
+    const cropMode = $(".rail-tool.active")?.dataset.panel === "crop";
     updateImagePan(event, scale, cropMode);
     draw();
     return;
