@@ -653,7 +653,7 @@ $("#fitButton").onclick = () => {
   setZoom(1);
 };
 $("#stageWrap").onwheel = (event) => {
-  if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"], [data-panel="adjust"]')) return;
+  if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"]')) return;
   event.preventDefault();
   setZoom(state.zoom + (event.deltaY < 0 ? .1 : -.1), event);
 };
