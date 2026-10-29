@@ -626,19 +626,32 @@ canvas.onpointercancel = (event) => {
   state.painting = false; state.lastPaintPoint = null; state.paintBuffer = null; state.densityMask = null;
   canvas.releasePointerCapture(event.pointerId); commitCanvas();
 };
-function setZoom(value) {
-  state.zoom = Math.max(.25, Math.min(3, Number(value) || 1));
+function setZoom(value, focalEvent = null) {
+  const previousZoom = state.zoom;
+  if (focalEvent && state.image) {
+    const transformedRect = canvas.getBoundingClientRect();
+    const baseScale = transformedRect.width / previousZoom / canvas.width || 1;
+    const focalX = (focalEvent.clientX - transformedRect.left) / (baseScale * previousZoom);
+    const focalY = (focalEvent.clientY - transformedRect.top) / (baseScale * previousZoom);
+    const nextZoom = Math.max(.25, Math.min(3, Number(value) || 1));
+    state.panX = (state.panX * previousZoom + (focalX - canvas.width / 2) * (previousZoom - nextZoom)) / nextZoom;
+    state.panY = (state.panY * previousZoom + (focalY - canvas.height / 2) * (previousZoom - nextZoom)) / nextZoom;
+    state.zoom = nextZoom;
+  } else {
+    state.zoom = Math.max(.25, Math.min(3, Number(value) || 1));
+  }
   $("#zoomValue").textContent = `${Math.round(state.zoom * 100)}%`;
   canvas.style.transform = `scale(${state.zoom})`;
   draw();
+  updateCropOverlay();
 }
-$("#zoomIn").onclick = () => setZoom(state.zoom + .1);
-$("#zoomOut").onclick = () => setZoom(state.zoom - .1);
+$("#zoomIn").onclick = () => setZoom(state.zoom + .1, { clientX: canvas.getBoundingClientRect().left + canvas.getBoundingClientRect().width / 2, clientY: canvas.getBoundingClientRect().top + canvas.getBoundingClientRect().height / 2 });
+$("#zoomOut").onclick = () => setZoom(state.zoom - .1, { clientX: canvas.getBoundingClientRect().left + canvas.getBoundingClientRect().width / 2, clientY: canvas.getBoundingClientRect().top + canvas.getBoundingClientRect().height / 2 });
 $("#fitButton").onclick = () => { state.panX = 0; state.panY = 0; setZoom(1); };
 $("#stageWrap").onwheel = (event) => {
   if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"]')) return;
   event.preventDefault();
-  setZoom(state.zoom + (event.deltaY < 0 ? .1 : -.1));
+  setZoom(state.zoom + (event.deltaY < 0 ? .1 : -.1), event);
 };
 function point(event) { const rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height }; }
 function updateBrushCursor(event) {
