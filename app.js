@@ -86,6 +86,7 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
   $("#panelTitle").textContent = panel === "crop" ? "Recadrer" : panel === "adjust" ? "Ajuster" : "Retouche";
   $("#cropOverlay").hidden = panel !== "crop" || !state.image;
   $(".stage-wrap").classList.toggle("retouch-active", panel === "retouch" && Boolean(state.image));
+  $(".stage-wrap").classList.toggle("adjust-active", panel === "adjust" && Boolean(state.image));
 });
 $$(".preset").forEach((button) => button.onclick = () => {
   $$(".preset").forEach((b) => b.classList.remove("active")); button.classList.add("active");
