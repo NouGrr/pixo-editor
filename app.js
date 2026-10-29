@@ -25,7 +25,7 @@ function draw() {
   const height = Math.ceil(image.naturalWidth * s + image.naturalHeight * c);
   state.renderWidth = width; state.renderHeight = height;
   canvas.width = width; canvas.height = height;
-  ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX * state.zoom, state.flipY * state.zoom);
+  ctx.save(); ctx.translate(width / 2 + state.panX, height / 2 + state.panY); ctx.rotate(angle); ctx.scale(state.flipX, state.flipY);
   ctx.filter = filterString(); ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);   ctx.restore();
   drawVignette(width, height);
   canvas.style.display = "block"; $("#emptyState").style.display = "none";
@@ -145,7 +145,7 @@ cropOverlay.onpointerdown = (event) => {
   cropOverlay.setPointerCapture(event.pointerId);
 };
 cropOverlay.onpointermove = (event) => {
-  const scale = canvas.getBoundingClientRect().width / canvas.width || 1;
+  const scale = canvas.getBoundingClientRect().width / state.zoom / canvas.width || 1;
   if (state.cropResize) {
     resizeCrop(event, scale);
     return;
@@ -220,7 +220,13 @@ function updateCropOverlay() {
   const overlay = $("#cropOverlay");
   if (!state.image) { overlay.hidden = true; return; }
   overlay.hidden = false;
-  const imageRect = canvas.getBoundingClientRect();
+  const transformedRect = canvas.getBoundingClientRect();
+  const imageRect = {
+    left: transformedRect.left + (transformedRect.width - transformedRect.width / state.zoom) / 2,
+    top: transformedRect.top + (transformedRect.height - transformedRect.height / state.zoom) / 2,
+    width: transformedRect.width / state.zoom,
+    height: transformedRect.height / state.zoom,
+  };
   const stageRect = $(".stage-wrap").getBoundingClientRect();
   const scale = imageRect.width / canvas.width || 1;
   let width = Number($("#cropWidth").value) || canvas.width;
@@ -584,7 +590,7 @@ canvas.onpointerdown = (event) => {
 canvas.onpointermove = (event) => {
   updateBrushCursor(event);
   if (state.panStart) {
-    const scale = canvas.getBoundingClientRect().width / canvas.width || 1;
+    const scale = canvas.getBoundingClientRect().width / state.zoom / canvas.width || 1;
     state.panX = state.panStart.panX + (event.clientX - state.panStart.x) / scale;
     state.panY = state.panStart.panY + (event.clientY - state.panStart.y) / scale;
     draw();
@@ -621,6 +627,7 @@ canvas.onpointercancel = (event) => {
 function setZoom(value) {
   state.zoom = Math.max(.25, Math.min(3, Number(value) || 1));
   $("#zoomValue").textContent = `${Math.round(state.zoom * 100)}%`;
+  canvas.style.transform = `scale(${state.zoom})`;
   draw();
 }
 $("#zoomIn").onclick = () => setZoom(state.zoom + .1);
