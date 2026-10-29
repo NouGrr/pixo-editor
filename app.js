@@ -647,7 +647,12 @@ function setZoom(value, focalEvent = null) {
 }
 $("#zoomIn").onclick = () => setZoom(state.zoom + .1, { clientX: canvas.getBoundingClientRect().left + canvas.getBoundingClientRect().width / 2, clientY: canvas.getBoundingClientRect().top + canvas.getBoundingClientRect().height / 2 });
 $("#zoomOut").onclick = () => setZoom(state.zoom - .1, { clientX: canvas.getBoundingClientRect().left + canvas.getBoundingClientRect().width / 2, clientY: canvas.getBoundingClientRect().top + canvas.getBoundingClientRect().height / 2 });
-$("#fitButton").onclick = () => { state.panX = 0; state.panY = 0; setZoom(1); };
+$("#fitButton").onclick = () => {
+  state.panX = 0;
+  state.panY = 0;
+  $(".stage-wrap").scrollTo({ left: 0, top: 0, behavior: "smooth" });
+  setZoom(1);
+};
 $("#stageWrap").onwheel = (event) => {
   if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"]')) return;
   event.preventDefault();
