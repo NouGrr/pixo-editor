@@ -642,6 +642,7 @@ function setZoom(value, focalEvent = null) {
   }
   $("#zoomValue").textContent = `${Math.round(state.zoom * 100)}%`;
   canvas.style.transform = `scale(${state.zoom})`;
+  $(".stage-wrap").classList.toggle("is-zoomed", state.zoom > 1);
   draw();
   updateCropOverlay();
 }
