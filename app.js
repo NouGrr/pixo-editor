@@ -565,7 +565,8 @@ canvas.onpointerdown = (event) => {
   if (!state.image || event.button !== 0) return;
   const activePanel = $(".rail-tool.active")?.dataset.panel;
   const cropMode = activePanel === "crop";
-  if (cropMode) {
+  const navigationMode = cropMode || activePanel === "adjust";
+  if (navigationMode) {
     state.panStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
     canvas.setPointerCapture(event.pointerId);
     return;
@@ -651,7 +652,7 @@ $("#fitButton").onclick = () => {
   setZoom(1);
 };
 $("#stageWrap").onwheel = (event) => {
-  if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"]')) return;
+  if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"], [data-panel="adjust"]')) return;
   event.preventDefault();
   setZoom(state.zoom + (event.deltaY < 0 ? .1 : -.1), event);
 };
