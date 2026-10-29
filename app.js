@@ -434,8 +434,11 @@ function prepareRetouchImage() {
   state.panX = 0;
   state.panY = 0;
   state.retouchImageBaked = true;
-  Object.keys(state.adjustments).forEach((key) => { state.adjustments[key] = 0; });
-  updateAdjustmentControls();
+  Object.keys(state.adjustments).forEach((key) => {
+    state.adjustments[key] = 0;
+    const input = $(`#${key}`); if (input) input.value = 0;
+    const output = $(`#${key}Output`); if (output) output.textContent = "0";
+  });
   draw();
 }
 
