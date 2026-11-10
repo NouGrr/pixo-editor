@@ -64,7 +64,11 @@ Le détourage IMG.LY est chargé directement dans le navigateur depuis un CDN et
 
 ## Formats pris en charge
 
-L'import accepte les formats d'image pris en charge par le navigateur. Les exports disponibles sont :
+L'import accepte les formats d'image pris en charge par le navigateur : JPG/JPEG, PNG, GIF, BMP, WebP, AVIF, SVG, TIFF, ICO et JPEG XL selon le navigateur.
+
+Les fichiers RAW Pentax **PEF** peuvent également être ouverts et retouchés. Pixo utilise leur aperçu JPEG intégré lorsque le navigateur ne sait pas décoder le RAW directement ; l’export produit alors une nouvelle image et ne réécrit pas le fichier RAW original. Les autres extensions RAW sont acceptées dans le sélecteur pour faciliter l’import, mais nécessitent encore un décodeur compatible dans le navigateur.
+
+Les exports disponibles sont :
 
 - PNG ;
 - JPG ;

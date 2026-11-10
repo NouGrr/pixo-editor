@@ -116,11 +116,62 @@ function getExportCanvas() {
   }
   return exportCanvas;
 }
-function loadFile(file) {
+const RAW_EXTENSIONS = new Set(["pef", "dng", "cr2", "cr3", "nef", "nrw", "arw", "orf", "rw2", "raf", "srw", "3fr", "iiq", "x3f"]);
+function fileExtension(file) {
+  return file.name.split(".").pop()?.toLowerCase() || "";
+}
+function readImageSource(blob, sourceName = blob.name) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(blob);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ image, sourceName });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Le navigateur ne peut pas décoder ce fichier."));
+    };
+    image.src = url;
+  });
+}
+async function extractEmbeddedJpeg(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let bestStart = -1;
+  let bestEnd = -1;
+  for (let start = 0; start < bytes.length - 3; start++) {
+    if (bytes[start] !== 0xff || bytes[start + 1] !== 0xd8 || bytes[start + 2] !== 0xff) continue;
+    let end = bytes.indexOf(0xff, start + 3);
+    while (end !== -1 && end < bytes.length - 1) {
+      if (bytes[end + 1] === 0xd9) {
+        if (bestStart === -1 || end + 2 - start > bestEnd - bestStart) {
+          bestStart = start;
+          bestEnd = end + 2;
+        }
+        break;
+      }
+      end = bytes.indexOf(0xff, end + 1);
+    }
+  }
+  if (bestStart === -1) throw new Error("Aucun aperçu JPEG intégré n’a été trouvé dans ce fichier PEF.");
+  return readImageSource(new Blob([bytes.slice(bestStart, bestEnd)], { type: "image/jpeg" }), file.name);
+}
+async function decodeImageFile(file) {
+  try {
+    return { ...(await readImageSource(file)), sourceFormat: "native" };
+  } catch (error) {
+    if (fileExtension(file) !== "pef") throw error;
+    const decoded = await extractEmbeddedJpeg(file);
+    return { ...decoded, sourceFormat: "pef-preview" };
+  }
+}
+async function loadFile(file) {
   if (!file) return;
-  const image = new Image();
-  image.onload = () => {
+  $("#canvasHint").textContent = "Ouverture de l’image…";
+  try {
+    const { image, sourceName, sourceFormat } = await decodeImageFile(file);
     state.image = image; state.fileName = file.name; state.history = []; state.historyIndex = -1;
+    state.sourceFormat = sourceFormat;
     state.imageScale = 1; state.zoom = 1; state.panX = 0; state.panY = 0;
     state.rotation = 0; state.straighten = 0; state.flipX = 1; state.flipY = 1;
     canvas.style.transform = "scale(1)";
@@ -130,7 +181,10 @@ function loadFile(file) {
     state.cutoutBase = null; state.cutoutEngine = null;
     state.upscaleCanvas = null;
     $(".canvas-area").classList.add("is-image-loaded");
-    $("#documentName").textContent = file.name; $("#canvasHint").textContent = "Image prête à être éditée";
+    $("#documentName").textContent = sourceName;
+    $("#canvasHint").textContent = sourceFormat === "pef-preview"
+      ? "PEF ouvert via son aperçu intégré — vous pouvez maintenant le retoucher"
+      : "Image prête à être éditée";
     draw();
     $("#preview4K").disabled = false;
     $("#downloadConverted").disabled = false;
@@ -146,8 +200,11 @@ function loadFile(file) {
     snapshot();
     $("#cropOverlay").hidden = true;
     updateCropOverlay();
-  };
-  image.src = URL.createObjectURL(file);
+  } catch (error) {
+    $("#canvasHint").textContent = RAW_EXTENSIONS.has(fileExtension(file))
+      ? "Ce RAW n’est pas décodable ici. Les PEF sont ouverts via leur aperçu JPEG intégré."
+      : error.message || "Impossible d’ouvrir ce fichier image.";
+  }
 }
 $("#openButton").onclick = () => $("#fileInput").click();
 $("#fileInput").onchange = (e) => loadFile(e.target.files[0]);

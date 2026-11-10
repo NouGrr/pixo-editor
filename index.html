@@ -47,9 +47,9 @@
             <div class="empty-state" id="emptyState">
               <div class="upload-icon">↑</div>
               <h2>Déposez votre image ici</h2>
-              <p>ou choisissez un fichier depuis votre appareil</p>
+              <p>ou choisissez un fichier depuis votre appareil<br /><small>JPG, PNG, GIF, BMP, WebP, AVIF, SVG, TIFF et PEF</small></p>
               <button class="primary-button" id="openButton">Choisir une image</button>
-              <input id="fileInput" type="file" accept="image/*" hidden />
+              <input id="fileInput" type="file" accept="image/*,.pef,.dng,.cr2,.cr3,.nef,.nrw,.arw,.orf,.rw2,.raf,.srw,.3fr,.iiq,.x3f,.tif,.tiff,.bmp,.gif,.ico,.svg,.webp,.avif,.jxl" hidden />
             </div>
             <canvas id="canvas"></canvas>
             <div class="vignette-overlay" id="vignetteOverlay" aria-hidden="true"></div>
