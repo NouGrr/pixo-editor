@@ -25,6 +25,7 @@
           <button class="rail-tool active" data-panel="crop" title="Recadrer"><span>⌗</span><small>Recadrer</small></button>
           <button class="rail-tool" data-panel="adjust" title="Ajuster"><span>☼</span><small>Ajuster</small></button>
           <button class="rail-tool" data-panel="retouch" title="Retouche"><span>✧</span><small>Retouche</small></button>
+          <button class="rail-tool" data-panel="compose" title="Composition"><span>▧</span><small>Composition</small></button>
         </aside>
 
         <section class="canvas-area">
@@ -217,6 +218,30 @@
             </div>
             <div class="clone-help" id="cloneHelp"><span class="help-icon">i</span><p><b>Le vrai tampon</b><br />Cliquez sur l’image pour définir une source, puis peignez où vous voulez la copier.</p><button class="secondary-button wide" id="resetCloneSource" type="button">Réinitialiser la source</button></div>
             <button class="secondary-button wide" id="clearRetouch">Effacer les retouches</button>
+          </section>
+
+          <section class="panel" data-content="compose" hidden>
+            <div class="section-title"><span>Composition photo</span><span class="muted">Calques</span></div>
+            <p class="panel-help">Ajoutez plusieurs photos, puis sélectionnez un calque pour le déplacer et le régler.</p>
+            <input id="compositionInput" type="file" accept="image/*" multiple hidden />
+            <button class="secondary-button wide" id="addCompositionImages">＋ Ajouter des photos</button>
+            <div class="section-title composition-layout-title"><span>Mise en page</span><span class="muted">Bord à bord</span></div>
+            <div class="composition-layouts">
+              <button class="secondary-button composition-layout" data-layout="square-grid" type="button">Carré 2×2</button>
+              <button class="secondary-button composition-layout" data-layout="portrait-stack" type="button">Portrait 4:5</button>
+              <button class="secondary-button composition-layout" data-layout="landscape-row" type="button">Paysage</button>
+              <button class="secondary-button composition-layout" data-layout="story-stack" type="button">Story 9:16</button>
+            </div>
+            <div class="composition-list" id="compositionList"></div>
+            <div class="composition-controls" id="compositionControls" hidden>
+              <div class="section-title"><span>Calque sélectionné</span></div>
+              <div class="control-row"><label>X <input id="layerX" type="number" step="1" /></label><label>Y <input id="layerY" type="number" step="1" /></label></div>
+              <div class="slider-control"><label>Échelle <output id="layerScaleOutput">100</output>%</label><input class="range" id="layerScale" type="range" min="10" max="300" value="100" /></div>
+              <div class="slider-control"><label>Opacité <output id="layerOpacityOutput">100</output>%</label><input class="range" id="layerOpacity" type="range" min="0" max="100" value="100" /></div>
+              <div class="slider-control"><label>Rotation <output id="layerRotationOutput">0</output>°</label><input class="range" id="layerRotation" type="range" min="-180" max="180" value="0" /></div>
+              <button class="secondary-button wide" id="removeCompositionLayer">Supprimer le calque</button>
+            </div>
+            <small class="cutout-note">Le premier calque définit le format de la composition. Faites glisser la photo active directement sur la zone centrale.</small>
           </section>
         </aside>
       </main>

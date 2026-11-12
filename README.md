@@ -22,6 +22,7 @@ Pixo est un éditeur photo directement utilisable dans le navigateur. Il fonctio
 ### Recadrer
 
 - formats libres et réseaux sociaux ;
+- saisie directe des valeurs numériques affichées à côté des curseurs ;
 - Instagram carré, portrait et paysage ;
 - Story, Reel, Snap Story, TikTok et YouTube Short ;
 - formats X/Twitter, Facebook, LinkedIn et YouTube ;
@@ -57,6 +58,15 @@ Le format sélectionné est affiché en aperçu. L'image n'est modifiée défini
 - aperçu et export en 4K ;
 - conversion en PNG, JPG, WebP ou AVIF ;
 - historique, annulation et rétablissement.
+
+### Composition photo
+
+- ajout de plusieurs photos dans une composition ;
+- mises en page Instagram carrée, portrait 4:5, paysage et Story 9:16 ;
+- grilles et bandes avec photos jointes bord à bord, automatiquement recadrées dans chaque case ;
+- calques sélectionnables, déplaçables à la souris et réglables ;
+- réglage de la position, de l'échelle, de la rotation et de l'opacité ;
+- export de la composition comme une image.
 
 ## Détourage automatique
 

@@ -6,6 +6,7 @@ const state = {
   image: null, fileName: "Sans titre", zoom: 1, rotation: 0, flipX: 1, flipY: 1,
   adjustments: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, clarity: 0, dehaze: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0, sharpness: 0, vignette: 0 },
   straighten: 0, cropRatio: null, cropPresetName: "Libre", imageScale: 1, cropFrameVisible: false, cropCommitted: null, cropImageLocked: true, renderWidth: 0, renderHeight: 0, cropX: 0, cropY: 0, cropStart: null, cropResize: null, panX: 0, panY: 0, panStart: null, tool: "heal", densityMode: "lighten", densityAmount: .35, brushSize: 36, brushOpacity: 1, blurDensity: 14, blurAmount: .7, densityMask: null, cloneSource: null, cloneBuffer: null, paintBuffer: null, lastPaintPoint: null, painting: false, maskMode: null, cutoutBase: null, cutoutEngine: null, upscaleCanvas: null, upscaleUrl: null, history: [], historyIndex: -1,
+  composition: null, compositionDrag: null,
 };
 
 function snapshot() {
@@ -18,6 +19,10 @@ function snapshot() {
 }
 function draw() {
   if (!state.image) return;
+  if ($(".rail-tool.active")?.matches('[data-panel="compose"]') && state.composition) {
+    drawComposition();
+    return;
+  }
   const image = state.image;
   const sourceWidth = image.naturalWidth || image.width;
   const sourceHeight = image.naturalHeight || image.height;
@@ -49,6 +54,218 @@ function draw() {
   updateVignetteOverlay();
   $("#imageInfo").textContent = `${canvas.width} × ${canvas.height}px`;
 }
+function drawComposition() {
+  const composition = state.composition;
+  if (!composition) return;
+  canvas.width = composition.width;
+  canvas.height = composition.height;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  composition.layers.forEach((layer) => {
+    ctx.save();
+    ctx.globalAlpha = layer.opacity;
+    if (layer.frame) {
+      const { x, y, width, height } = layer.frame;
+      const sourceWidth = layer.image.naturalWidth || layer.image.width;
+      const sourceHeight = layer.image.naturalHeight || layer.image.height;
+      const scale = Math.max(width / sourceWidth, height / sourceHeight);
+      const drawWidth = sourceWidth * scale;
+      const drawHeight = sourceHeight * scale;
+      ctx.beginPath();
+      ctx.rect(x, y, width, height);
+      ctx.clip();
+      ctx.drawImage(layer.image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+      ctx.restore();
+      return;
+    }
+    ctx.translate(layer.x, layer.y);
+    ctx.rotate(layer.rotation * Math.PI / 180);
+    ctx.scale(layer.scale, layer.scale);
+    ctx.drawImage(layer.image, -layer.image.naturalWidth / 2, -layer.image.naturalHeight / 2);
+    ctx.restore();
+  });
+  state.renderWidth = canvas.width;
+  state.renderHeight = canvas.height;
+  canvas.style.filter = filterString();
+  canvas.style.display = "block";
+  $("#emptyState").style.display = "none";
+  fitCanvasToStage();
+  updateVignetteOverlay();
+  $("#imageInfo").textContent = `${canvas.width} × ${canvas.height}px · ${composition.layers.length} calque${composition.layers.length > 1 ? "s" : ""}`;
+}
+function ensureComposition() {
+  if (state.composition || !state.image) return;
+  const width = state.image.naturalWidth || state.image.width;
+  const height = state.image.naturalHeight || state.image.height;
+  state.composition = {
+    width,
+    height,
+    activeIndex: 0,
+    layers: [{ image: state.image, name: state.fileName, x: width / 2, y: height / 2, scale: 1, opacity: 1, rotation: 0 }],
+  };
+  updateCompositionList();
+}
+function activeCompositionLayer() {
+  return state.composition?.layers[state.composition.activeIndex];
+}
+function applyCompositionLayout(layout) {
+  const composition = state.composition;
+  if (!composition?.layers.length) return;
+  const count = composition.layers.length;
+  let width = 1080;
+  let height = 1080;
+  let columns = 2;
+  let rows = Math.ceil(count / columns);
+  if (layout === "portrait-stack") {
+    height = 1350;
+    columns = 1;
+    rows = count;
+  } else if (layout === "landscape-row") {
+    width = Math.max(1200, count * 600);
+    height = 628;
+    columns = count;
+    rows = 1;
+  } else if (layout === "story-stack") {
+    height = 1920;
+    columns = 1;
+    rows = count;
+  } else {
+    columns = Math.ceil(Math.sqrt(count));
+    rows = Math.ceil(count / columns);
+  }
+  composition.width = width;
+  composition.height = height;
+  composition.layout = layout;
+  const cellWidth = width / columns;
+  const cellHeight = height / rows;
+  composition.layers.forEach((layer, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    layer.frame = { x: column * cellWidth, y: row * cellHeight, width: cellWidth, height: cellHeight };
+    layer.x = layer.frame.x + cellWidth / 2;
+    layer.y = layer.frame.y + cellHeight / 2;
+    layer.scale = 1;
+    layer.rotation = 0;
+  });
+  updateCompositionList();
+  draw();
+  snapshot();
+}
+function updateCompositionList() {
+  const list = $("#compositionList");
+  if (!list) return;
+  list.replaceChildren();
+  const composition = state.composition;
+  if (!composition?.layers.length) {
+    list.innerHTML = '<small class="cutout-note">Aucune photo ajoutée.</small>';
+    $("#compositionControls").hidden = true;
+    return;
+  }
+  composition.layers.forEach((layer, index) => {
+    const button = document.createElement("button");
+    button.className = `composition-layer${index === composition.activeIndex ? " active" : ""}`;
+    button.type = "button";
+    const thumbnail = document.createElement("img");
+    thumbnail.src = layer.image.src;
+    thumbnail.alt = "";
+    const label = document.createElement("span");
+    label.textContent = layer.name;
+    button.append(thumbnail, label);
+    button.onclick = () => {
+      composition.activeIndex = index;
+      updateCompositionList();
+      updateCompositionControls();
+      draw();
+    };
+    list.append(button);
+  });
+  $("#compositionControls").hidden = false;
+  updateCompositionControls();
+}
+function updateCompositionControls() {
+  const layer = activeCompositionLayer();
+  if (!layer) return;
+  $("#layerX").value = Math.round(layer.x);
+  $("#layerY").value = Math.round(layer.y);
+  $("#layerScale").value = Math.round(layer.scale * 100);
+  $("#layerScaleOutput").textContent = Math.round(layer.scale * 100);
+  $("#layerOpacity").value = Math.round(layer.opacity * 100);
+  $("#layerOpacityOutput").textContent = Math.round(layer.opacity * 100);
+  $("#layerRotation").value = Math.round(layer.rotation);
+  $("#layerRotationOutput").textContent = Math.round(layer.rotation);
+}
+async function addCompositionFiles(files) {
+  if (!files.length) return;
+  ensureComposition();
+  for (const file of files) {
+    const { image } = await readImageSource(file);
+    const composition = state.composition;
+    composition.layers.push({
+      image,
+      name: file.name,
+      x: composition.width / 2,
+      y: composition.height / 2,
+      scale: Math.min(1, composition.width / image.naturalWidth, composition.height / image.naturalHeight),
+      opacity: 1,
+      rotation: 0,
+    });
+    composition.activeIndex = composition.layers.length - 1;
+  }
+  if (state.composition.layout) {
+    applyCompositionLayout(state.composition.layout);
+    return;
+  }
+  updateCompositionList();
+  draw();
+  snapshot();
+}
+$("#addCompositionImages").onclick = () => $("#compositionInput").click();
+$("#compositionInput").onchange = async (event) => {
+  try {
+    await addCompositionFiles([...event.target.files]);
+  } catch (error) {
+    $("#canvasHint").textContent = error.message || "Impossible d’ajouter cette photo à la composition.";
+  } finally {
+    event.target.value = "";
+  }
+};
+["layerX", "layerY"].forEach((id) => {
+  $(`#${id}`).oninput = (event) => {
+    const layer = activeCompositionLayer();
+    if (!layer) return;
+    layer[id === "layerX" ? "x" : "y"] = Number(event.target.value) || 0;
+    draw();
+  };
+});
+[
+  ["layerScale", "scale", 100, "layerScaleOutput"],
+  ["layerOpacity", "opacity", 100, "layerOpacityOutput"],
+  ["layerRotation", "rotation", 1, "layerRotationOutput"],
+].forEach(([id, property, divisor, outputId]) => {
+  $(`#${id}`).oninput = (event) => {
+    const layer = activeCompositionLayer();
+    if (!layer) return;
+    layer[property] = Number(event.target.value) / divisor;
+    $(`#${outputId}`).textContent = event.target.value;
+    draw();
+  };
+});
+makeEditableOutput("layerScaleOutput", "layerScale", { min: 10, max: 300 });
+makeEditableOutput("layerOpacityOutput", "layerOpacity", { min: 0, max: 100 });
+makeEditableOutput("layerRotationOutput", "layerRotation", { min: -180, max: 180 });
+$("#removeCompositionLayer").onclick = () => {
+  if (!state.composition) return;
+  state.composition.layers.splice(state.composition.activeIndex, 1);
+  state.composition.activeIndex = Math.max(0, state.composition.activeIndex - 1);
+  updateCompositionList();
+  draw();
+  snapshot();
+};
+$$(".composition-layout").forEach((button) => {
+  button.onclick = () => {
+    ensureComposition();
+    applyCompositionLayout(button.dataset.layout);
+  };
+});
 let drawFrame = 0;
 function scheduleDraw() {
   if (drawFrame) return;
@@ -180,6 +397,7 @@ async function loadFile(file) {
     state.cropImageLocked = true;
     state.cutoutBase = null; state.cutoutEngine = null;
     state.upscaleCanvas = null;
+    state.composition = null;
     $(".canvas-area").classList.add("is-image-loaded");
     $("#documentName").textContent = sourceName;
     $("#canvasHint").textContent = sourceFormat === "pef-preview"
@@ -219,6 +437,7 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
   if (previousPanel === "crop" && button.dataset.panel !== "crop") restoreCommittedCrop();
   $$(".rail-tool").forEach((b) => b.classList.remove("active")); button.classList.add("active");
   const panel = button.dataset.panel;
+  if (panel === "compose") ensureComposition();
   $$(".panel").forEach((p) => p.hidden = p.dataset.content !== panel);
   $("#panelTitle").textContent = panel === "crop" ? "Recadrer" : panel === "adjust" ? "Ajuster" : "Retouche";
   if (panel === "crop") {
@@ -233,6 +452,7 @@ $$(".rail-tool").forEach((button) => button.onclick = () => {
   $(".stage-wrap").classList.toggle("retouch-active", panel === "retouch" && Boolean(state.image) && Boolean(state.tool));
   $(".stage-wrap").classList.toggle("adjust-active", panel === "adjust" && Boolean(state.image));
   $(".stage-wrap").classList.toggle("crop-active", panel === "crop" && Boolean(state.image));
+  $(".stage-wrap").classList.toggle("compose-active", panel === "compose" && Boolean(state.image));
   if (panel === "adjust") {
     updateAdjustmentControls();
   }
@@ -522,6 +742,46 @@ $("#applyCrop").onclick = () => {
   };
   image.src = source;
 };
+function makeEditableOutput(outputId, inputId, { min = -Infinity, max = Infinity, integer = true } = {}) {
+  const output = $(`#${outputId}`);
+  const input = $(`#${inputId}`);
+  if (!output || !input) return;
+  output.contentEditable = "true";
+  output.setAttribute("role", "spinbutton");
+  output.setAttribute("aria-label", `Valeur de ${inputId}`);
+  output.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      output.blur();
+    }
+  });
+  output.addEventListener("blur", () => {
+    const raw = Number.parseFloat(output.textContent.replace(",", "."));
+    if (!Number.isFinite(raw)) {
+      output.textContent = input.value;
+      return;
+    }
+    const value = Math.max(min, Math.min(max, integer ? Math.round(raw) : raw));
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+Object.keys(state.adjustments).forEach((key) => {
+  const input = $(`#${key}`);
+  makeEditableOutput(`${key}Output`, key, {
+    min: Number(input?.min || -Infinity),
+    max: Number(input?.max || Infinity),
+    integer: input?.step !== "0.1",
+  });
+});
+makeEditableOutput("densityAmountOutput", "densityAmount", { min: 5, max: 100 });
+makeEditableOutput("brushSizeOutput", "brushSize", { min: 8, max: 160 });
+makeEditableOutput("brushOpacityOutput", "brushOpacity", { min: 10, max: 100 });
+makeEditableOutput("blurDensityOutput", "blurDensity", { min: 2, max: 48 });
+makeEditableOutput("blurAmountOutput", "blurAmount", { min: 5, max: 100 });
+makeEditableOutput("cutoutToleranceOutput", "cutoutTolerance", { min: 20, max: 160 });
+makeEditableOutput("cutoutSoftnessOutput", "cutoutSoftness", { min: 0, max: 60 });
+makeEditableOutput("convertQualityOutput", "convertQuality", { min: 10, max: 100 });
 $$(".adjustment").forEach((input) => input.oninput = () => {
   if ($(".rail-tool.active")?.matches('[data-panel="retouch"]')) return;
   $$(".look-button").forEach((button) => button.classList.remove("active"));
@@ -880,6 +1140,13 @@ canvas.onpointerdown = (event) => {
   if (!state.image || event.button !== 0) return;
   event.preventDefault();
   const activePanel = $(".rail-tool.active")?.dataset.panel;
+  if (activePanel === "compose" && state.composition) {
+    const layer = activeCompositionLayer();
+    if (!layer) return;
+    state.compositionDrag = { point: point(event), x: layer.x, y: layer.y };
+    canvas.setPointerCapture(event.pointerId);
+    return;
+  }
   const cropMode = activePanel === "crop";
   const navigationMode = cropMode || activePanel === "adjust" || (activePanel === "retouch" && !state.tool);
   if (navigationMode) {
@@ -907,6 +1174,16 @@ canvas.onpointerdown = (event) => {
 };
 canvas.onpointermove = (event) => {
   updateBrushCursor(event);
+  if (state.compositionDrag) {
+    const layer = activeCompositionLayer();
+    const start = state.compositionDrag;
+    const current = point(event);
+    layer.x = start.x + current.x - start.point.x;
+    layer.y = start.y + current.y - start.point.y;
+    updateCompositionControls();
+    draw();
+    return;
+  }
   if (state.panStart) {
     const scale = canvas.getBoundingClientRect().width / state.zoom / canvas.width || 1;
     const cropMode = $(".rail-tool.active")?.dataset.panel === "crop";
@@ -922,6 +1199,12 @@ canvas.onpointermove = (event) => {
 canvas.onpointerenter = updateBrushCursor;
 canvas.onpointerleave = () => { $("#brushCursor").style.display = "none"; };
 canvas.onpointerup = (event) => {
+  if (state.compositionDrag) {
+    state.compositionDrag = null;
+    canvas.releasePointerCapture(event.pointerId);
+    snapshot();
+    return;
+  }
   if (state.panStart) {
     state.panStart = null;
     snapshot();
@@ -934,6 +1217,11 @@ canvas.onpointerup = (event) => {
   canvas.releasePointerCapture(event.pointerId); commitCanvas();
 };
 canvas.onpointercancel = (event) => {
+  if (state.compositionDrag) {
+    state.compositionDrag = null;
+    canvas.releasePointerCapture(event.pointerId);
+    return;
+  }
   if (state.panStart) {
     state.panStart = null;
     return;
