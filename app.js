@@ -65,15 +65,11 @@ function drawComposition() {
     ctx.globalAlpha = layer.opacity;
     if (layer.frame) {
       const { x, y, width, height } = layer.frame;
-      const sourceWidth = layer.image.naturalWidth || layer.image.width;
-      const sourceHeight = layer.image.naturalHeight || layer.image.height;
-      const scale = Math.max(width / sourceWidth, height / sourceHeight);
-      const drawWidth = sourceWidth * scale;
-      const drawHeight = sourceHeight * scale;
+      const geometry = frameImageGeometry(layer);
       ctx.beginPath();
       ctx.rect(x, y, width, height);
       ctx.clip();
-      ctx.drawImage(layer.image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+      ctx.drawImage(layer.image, geometry.x, geometry.y, geometry.width, geometry.height);
       ctx.restore();
       return;
     }
@@ -83,6 +79,26 @@ function drawComposition() {
     ctx.drawImage(layer.image, -layer.image.naturalWidth / 2, -layer.image.naturalHeight / 2);
     ctx.restore();
   });
+  const drag = state.compositionDrag;
+  if (drag?.mode === "swap" && drag.targetIndex != null) {
+    const source = composition.layers[drag.index]?.frame;
+    const target = composition.layers[drag.targetIndex]?.frame;
+    ctx.save();
+    ctx.lineWidth = Math.max(4, composition.width / 180);
+    if (source) {
+      ctx.strokeStyle = "rgba(255, 255, 255, .55)";
+      ctx.setLineDash([ctx.lineWidth * 3, ctx.lineWidth * 2]);
+      ctx.strokeRect(source.x + ctx.lineWidth / 2, source.y + ctx.lineWidth / 2, source.width - ctx.lineWidth, source.height - ctx.lineWidth);
+    }
+    if (target && drag.targetIndex !== drag.index) {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "#a78bfa";
+      ctx.fillStyle = "rgba(167, 139, 250, .18)";
+      ctx.fillRect(target.x, target.y, target.width, target.height);
+      ctx.strokeRect(target.x + ctx.lineWidth / 2, target.y + ctx.lineWidth / 2, target.width - ctx.lineWidth, target.height - ctx.lineWidth);
+    }
+    ctx.restore();
+  }
   state.renderWidth = canvas.width;
   state.renderHeight = canvas.height;
   canvas.style.filter = filterString();
@@ -106,6 +122,50 @@ function ensureComposition() {
 }
 function activeCompositionLayer() {
   return state.composition?.layers[state.composition.activeIndex];
+}
+// Image placement inside a layout cell: always covers the cell, can be zoomed (scale ≥ 1)
+// and panned. panX/panY are normalised in [-1, 1] relative to the overflow, so the framing
+// survives a swap or a layout change even when the cell size changes.
+function frameImageGeometry(layer) {
+  const { x, y, width, height } = layer.frame;
+  const sourceWidth = layer.image.naturalWidth || layer.image.width;
+  const sourceHeight = layer.image.naturalHeight || layer.image.height;
+  const scale = Math.max(width / sourceWidth, height / sourceHeight) * Math.max(1, layer.scale || 1);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  const overflowX = (drawWidth - width) / 2;
+  const overflowY = (drawHeight - height) / 2;
+  return {
+    x: x + (width - drawWidth) / 2 + (layer.panX || 0) * overflowX,
+    y: y + (height - drawHeight) / 2 + (layer.panY || 0) * overflowY,
+    width: drawWidth,
+    height: drawHeight,
+    overflowX,
+    overflowY,
+  };
+}
+const clampUnit = (value) => Math.max(-1, Math.min(1, value));
+function compositionLayerIndexAt(pointValue) {
+  const layers = state.composition?.layers || [];
+  for (let index = layers.length - 1; index >= 0; index--) {
+    const frame = layers[index].frame;
+    if (frame && pointValue.x >= frame.x && pointValue.x < frame.x + frame.width && pointValue.y >= frame.y && pointValue.y < frame.y + frame.height) return index;
+  }
+  return -1;
+}
+function swapCompositionLayers(from, to) {
+  const composition = state.composition;
+  if (!composition || from === to || from < 0 || to < 0 || from >= composition.layers.length || to >= composition.layers.length) return;
+  const layers = composition.layers;
+  const fromFrame = layers[from].frame;
+  layers[from].frame = layers[to].frame;
+  layers[to].frame = fromFrame;
+  [layers[from], layers[to]] = [layers[to], layers[from]];
+  if (composition.activeIndex === from) composition.activeIndex = to;
+  else if (composition.activeIndex === to) composition.activeIndex = from;
+  updateCompositionList();
+  draw();
+  snapshot();
 }
 function applyCompositionLayout(layout) {
   const composition = state.composition;
@@ -145,6 +205,8 @@ function applyCompositionLayout(layout) {
     layer.y = layer.frame.y + cellHeight / 2;
     layer.scale = 1;
     layer.rotation = 0;
+    layer.panX ??= 0;
+    layer.panY ??= 0;
   });
   updateCompositionList();
   draw();
@@ -164,12 +226,35 @@ function updateCompositionList() {
     const button = document.createElement("button");
     button.className = `composition-layer${index === composition.activeIndex ? " active" : ""}`;
     button.type = "button";
-    const thumbnail = document.createElement("img");
-    thumbnail.src = layer.image.src;
-    thumbnail.alt = "";
+    // The source object URL is revoked after decoding, so draw the thumbnail from the loaded image.
+    const thumbnail = document.createElement("canvas");
+    thumbnail.width = thumbnail.height = 64;
+    const sourceWidth = layer.image.naturalWidth || layer.image.width;
+    const sourceHeight = layer.image.naturalHeight || layer.image.height;
+    const side = Math.min(sourceWidth, sourceHeight);
+    thumbnail.getContext("2d").drawImage(layer.image, (sourceWidth - side) / 2, (sourceHeight - side) / 2, side, side, 0, 0, 64, 64);
     const label = document.createElement("span");
     label.textContent = layer.name;
     button.append(thumbnail, label);
+    button.draggable = true;
+    button.title = composition.layout ? "Glissez sur une autre photo pour les échanger" : layer.name;
+    button.ondragstart = (event) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(index));
+      button.classList.add("dragging");
+    };
+    button.ondragend = () => button.classList.remove("dragging");
+    button.ondragover = (event) => {
+      event.preventDefault();
+      button.classList.add("drop-target");
+    };
+    button.ondragleave = () => button.classList.remove("drop-target");
+    button.ondrop = (event) => {
+      event.preventDefault();
+      button.classList.remove("drop-target");
+      const from = Number(event.dataTransfer.getData("text/plain"));
+      if (Number.isInteger(from)) swapCompositionLayers(from, index);
+    };
     button.onclick = () => {
       composition.activeIndex = index;
       updateCompositionList();
@@ -184,8 +269,15 @@ function updateCompositionList() {
 function updateCompositionControls() {
   const layer = activeCompositionLayer();
   if (!layer) return;
-  $("#layerX").value = Math.round(layer.x);
-  $("#layerY").value = Math.round(layer.y);
+  const framed = Boolean(layer.frame);
+  $("#layerXLabel").textContent = framed ? "Cadrage X (%)" : "X";
+  $("#layerYLabel").textContent = framed ? "Cadrage Y (%)" : "Y";
+  $("#layerScaleLabel").textContent = framed ? "Zoom" : "Échelle";
+  $("#layerRotationControl").hidden = framed;
+  $("#layerScale").min = framed ? 100 : 10;
+  $("#resetLayerFraming").hidden = !framed;
+  $("#layerX").value = framed ? Math.round((layer.panX || 0) * 100) : Math.round(layer.x);
+  $("#layerY").value = framed ? Math.round((layer.panY || 0) * 100) : Math.round(layer.y);
   $("#layerScale").value = Math.round(layer.scale * 100);
   $("#layerScaleOutput").textContent = Math.round(layer.scale * 100);
   $("#layerOpacity").value = Math.round(layer.opacity * 100);
@@ -232,7 +324,9 @@ $("#compositionInput").onchange = async (event) => {
   $(`#${id}`).oninput = (event) => {
     const layer = activeCompositionLayer();
     if (!layer) return;
-    layer[id === "layerX" ? "x" : "y"] = Number(event.target.value) || 0;
+    const value = Number(event.target.value) || 0;
+    if (layer.frame) layer[id === "layerX" ? "panX" : "panY"] = clampUnit(value / 100);
+    else layer[id === "layerX" ? "x" : "y"] = value;
     draw();
   };
 });
@@ -244,14 +338,26 @@ $("#compositionInput").onchange = async (event) => {
   $(`#${id}`).oninput = (event) => {
     const layer = activeCompositionLayer();
     if (!layer) return;
-    layer[property] = Number(event.target.value) / divisor;
-    $(`#${outputId}`).textContent = event.target.value;
+    let value = Number(event.target.value);
+    if (property === "scale" && layer.frame) value = Math.max(100, value);
+    layer[property] = value / divisor;
+    $(`#${outputId}`).textContent = value;
     draw();
   };
 });
 makeEditableOutput("layerScaleOutput", "layerScale", { min: 10, max: 300 });
 makeEditableOutput("layerOpacityOutput", "layerOpacity", { min: 0, max: 100 });
 makeEditableOutput("layerRotationOutput", "layerRotation", { min: -180, max: 180 });
+$("#resetLayerFraming").onclick = () => {
+  const layer = activeCompositionLayer();
+  if (!layer?.frame) return;
+  layer.panX = 0;
+  layer.panY = 0;
+  layer.scale = 1;
+  updateCompositionControls();
+  draw();
+  snapshot();
+};
 $("#removeCompositionLayer").onclick = () => {
   if (!state.composition) return;
   state.composition.layers.splice(state.composition.activeIndex, 1);
@@ -1141,9 +1247,25 @@ canvas.onpointerdown = (event) => {
   event.preventDefault();
   const activePanel = $(".rail-tool.active")?.dataset.panel;
   if (activePanel === "compose" && state.composition) {
+    const composition = state.composition;
+    const start = point(event);
+    if (composition.layout) {
+      const index = compositionLayerIndexAt(start);
+      if (index < 0) return;
+      if (index !== composition.activeIndex) {
+        composition.activeIndex = index;
+        updateCompositionList();
+      }
+      const layer = composition.layers[index];
+      const swap = event.altKey || event.shiftKey;
+      state.compositionDrag = { mode: swap ? "swap" : "pan", index, targetIndex: index, point: start, panX: layer.panX || 0, panY: layer.panY || 0 };
+      canvas.setPointerCapture(event.pointerId);
+      draw();
+      return;
+    }
     const layer = activeCompositionLayer();
     if (!layer) return;
-    state.compositionDrag = { point: point(event), x: layer.x, y: layer.y };
+    state.compositionDrag = { mode: "move", point: start, x: layer.x, y: layer.y };
     canvas.setPointerCapture(event.pointerId);
     return;
   }
@@ -1178,8 +1300,22 @@ canvas.onpointermove = (event) => {
     const layer = activeCompositionLayer();
     const start = state.compositionDrag;
     const current = point(event);
-    layer.x = start.x + current.x - start.point.x;
-    layer.y = start.y + current.y - start.point.y;
+    if (start.mode === "swap") {
+      const target = compositionLayerIndexAt(current);
+      if (target !== start.targetIndex) {
+        start.targetIndex = target < 0 ? null : target;
+        draw();
+      }
+      return;
+    }
+    if (start.mode === "pan") {
+      const { overflowX, overflowY } = frameImageGeometry(layer);
+      if (overflowX > 0) layer.panX = clampUnit(start.panX + (current.x - start.point.x) / overflowX);
+      if (overflowY > 0) layer.panY = clampUnit(start.panY + (current.y - start.point.y) / overflowY);
+    } else {
+      layer.x = start.x + current.x - start.point.x;
+      layer.y = start.y + current.y - start.point.y;
+    }
     updateCompositionControls();
     draw();
     return;
@@ -1200,8 +1336,14 @@ canvas.onpointerenter = updateBrushCursor;
 canvas.onpointerleave = () => { $("#brushCursor").style.display = "none"; };
 canvas.onpointerup = (event) => {
   if (state.compositionDrag) {
+    const drag = state.compositionDrag;
     state.compositionDrag = null;
     canvas.releasePointerCapture(event.pointerId);
+    if (drag.mode === "swap") {
+      if (drag.targetIndex != null && drag.targetIndex !== drag.index) swapCompositionLayers(drag.index, drag.targetIndex);
+      else draw();
+      return;
+    }
     snapshot();
     return;
   }
@@ -1218,8 +1360,10 @@ canvas.onpointerup = (event) => {
 };
 canvas.onpointercancel = (event) => {
   if (state.compositionDrag) {
+    const drag = state.compositionDrag;
     state.compositionDrag = null;
     canvas.releasePointerCapture(event.pointerId);
+    if (drag.mode === "swap") draw();
     return;
   }
   if (state.panStart) {
@@ -1258,6 +1402,24 @@ $("#fitButton").onclick = () => {
   $(".stage-wrap").scrollTo({ left: 0, top: 0, behavior: "smooth" });
   setZoom(1);
 };
+let compositionWheelSnapshot = 0;
+canvas.addEventListener("wheel", (event) => {
+  const composition = state.composition;
+  if (!composition?.layout || !$(".rail-tool.active")?.matches('[data-panel="compose"]')) return;
+  const index = compositionLayerIndexAt(point(event));
+  if (index < 0) return;
+  event.preventDefault();
+  if (index !== composition.activeIndex) {
+    composition.activeIndex = index;
+    updateCompositionList();
+  }
+  const layer = composition.layers[index];
+  layer.scale = Math.max(1, Math.min(3, (layer.scale || 1) * Math.exp(-event.deltaY * .0015)));
+  updateCompositionControls();
+  draw();
+  clearTimeout(compositionWheelSnapshot);
+  compositionWheelSnapshot = setTimeout(snapshot, 300);
+}, { passive: false });
 $("#stageWrap").onwheel = (event) => {
   if (!state.image || !$(".rail-tool.active")?.matches('[data-panel="crop"]')) return;
   if (event.ctrlKey) event.preventDefault();

@@ -148,7 +148,10 @@ output { color: var(--accent); font-size: 11px; }
 .composition-layout { padding: 8px 5px; font-size: 10px; }
 .composition-layer { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px; color: #dce1f0; border: 1px solid var(--border); border-radius: 6px; background: #191b24; text-align: left; }
 .composition-layer.active { border-color: var(--accent); background: #292333; }
-.composition-layer img { width: 32px; height: 32px; border-radius: 4px; object-fit: cover; }
+.composition-layer.dragging { opacity: .45; }
+.composition-layer.drop-target { border-color: var(--green); border-style: dashed; }
+.slider-control[hidden] { display: none; }
+.composition-layer canvas { width: 32px; height: 32px; border-radius: 4px; object-fit: cover; }
 .composition-layer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 .composition-controls { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: #202638; }
 .composition-controls[hidden] { display: none; }

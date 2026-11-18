@@ -235,13 +235,14 @@
             <div class="composition-list" id="compositionList"></div>
             <div class="composition-controls" id="compositionControls" hidden>
               <div class="section-title"><span>Calque sélectionné</span></div>
-              <div class="control-row"><label>X <input id="layerX" type="number" step="1" /></label><label>Y <input id="layerY" type="number" step="1" /></label></div>
-              <div class="slider-control"><label>Échelle <output id="layerScaleOutput">100</output>%</label><input class="range" id="layerScale" type="range" min="10" max="300" value="100" /></div>
+              <div class="control-row"><label><span id="layerXLabel">X</span> <input id="layerX" type="number" step="1" /></label><label><span id="layerYLabel">Y</span> <input id="layerY" type="number" step="1" /></label></div>
+              <div class="slider-control"><label><span id="layerScaleLabel">Échelle</span> <output id="layerScaleOutput">100</output>%</label><input class="range" id="layerScale" type="range" min="10" max="300" value="100" /></div>
               <div class="slider-control"><label>Opacité <output id="layerOpacityOutput">100</output>%</label><input class="range" id="layerOpacity" type="range" min="0" max="100" value="100" /></div>
-              <div class="slider-control"><label>Rotation <output id="layerRotationOutput">0</output>°</label><input class="range" id="layerRotation" type="range" min="-180" max="180" value="0" /></div>
+              <div class="slider-control" id="layerRotationControl"><label>Rotation <output id="layerRotationOutput">0</output>°</label><input class="range" id="layerRotation" type="range" min="-180" max="180" value="0" /></div>
+              <button class="secondary-button wide" id="resetLayerFraming" type="button" hidden>Recentrer la photo</button>
               <button class="secondary-button wide" id="removeCompositionLayer">Supprimer le calque</button>
             </div>
-            <small class="cutout-note">Le premier calque définit le format de la composition. Faites glisser la photo active directement sur la zone centrale.</small>
+            <small class="cutout-note">Le premier calque définit le format de la composition. Avec une mise en page : glissez dans une case pour recadrer la photo à l’intérieur, molette pour zoomer, <b>Maj</b> ou <b>Alt</b> + glisser vers une autre case (ou glisser dans la liste) pour échanger deux photos.</small>
           </section>
         </aside>
       </main>

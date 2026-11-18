@@ -65,6 +65,8 @@ Le format sélectionné est affiché en aperçu. L'image n'est modifiée défini
 - mises en page Instagram carrée, portrait 4:5, paysage et Story 9:16 ;
 - grilles et bandes avec photos jointes bord à bord, automatiquement recadrées dans chaque case ;
 - calques sélectionnables, déplaçables à la souris et réglables ;
+- recadrage de chaque photo à l'intérieur de sa case (glisser, molette pour zoomer) sans sortir de la mise en page ;
+- échange de deux photos par Maj/Alt + glisser sur la composition ou par glisser-déposer dans la liste ;
 - réglage de la position, de l'échelle, de la rotation et de l'opacité ;
 - export de la composition comme une image.
 
